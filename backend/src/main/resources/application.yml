@@ -1,0 +1,36 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 2MB
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/chess_analysis?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:chess_user}
+    password: ${DB_PASSWORD:chess_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+  auth:
+    cookie-name: chess_session
+    cookie-secure: ${COOKIE_SECURE:false}
+    session-days: ${SESSION_DAYS:7}
+  stockfish:
+    path: ${STOCKFISH_PATH:stockfish}
+    threads: ${STOCKFISH_THREADS:2}
+    hash-mb: ${STOCKFISH_HASH_MB:128}
+    position-timeout-seconds: ${STOCKFISH_POSITION_TIMEOUT_SECONDS:120}

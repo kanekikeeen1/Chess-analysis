@@ -1,0 +1,5 @@
+Move.mp3 and Capture.mp3 are from the Lichess standard sound set:
+https://github.com/lichess-org/lila/tree/master/public/sound/standard
+
+Lichess source repository:
+https://github.com/lichess-org/lila
