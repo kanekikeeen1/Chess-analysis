@@ -19,6 +19,7 @@ export type GameDetail = GameSummary & {
   initialFen: string;
   finalFen: string;
   analysisJson: string;
+  analysisJobId?: string | null;
   updatedAt: string;
 };
 
@@ -136,4 +137,36 @@ export type EvaluateMoveResult = {
   opponentReply: string | null;
   before: BackendPositionEvaluation;
   after: BackendPositionEvaluation;
+};
+
+export type ClassifyMovesResult = {
+  moves: BackendMoveReview[];
+  whiteAccuracy: number | null;
+  blackAccuracy: number | null;
+  /** "rules" khi dùng bộ luật ngưỡng, "model" khi mô hình M1 đã vào chỗ. */
+  labelSource: string;
+};
+
+export type AnalysisMetrics = {
+  cache: {
+    hits: number;
+    misses: number;
+    skipped: number;
+    hitRate: number;
+    storedPositions: number;
+  };
+  enginePool: {
+    size: number;
+    idleCount: number;
+    inUse: number;
+    totalBorrows: number;
+    reusedEngines: number;
+    startedProcesses: number;
+  };
+  queue: {
+    queued: number;
+    running: number;
+    workers: number;
+    remainingCapacity: number;
+  };
 };

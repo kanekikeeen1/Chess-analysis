@@ -26,6 +26,7 @@ public final class StockfishEngine implements AutoCloseable {
     private final BufferedReader output;
     private final BufferedWriter input;
     private final Duration timeout;
+    private String engineName = "stockfish";
 
     public StockfishEngine(String executable, int threads, int hashMb, Duration timeout) {
         try {
@@ -35,7 +36,7 @@ public final class StockfishEngine implements AutoCloseable {
             this.timeout = timeout;
 
             send("uci");
-            waitFor("uciok", Duration.ofSeconds(15));
+            readIdentity(Duration.ofSeconds(15));
             send("setoption name Threads value " + Math.max(1, threads));
             send("setoption name Hash value " + Math.max(16, hashMb));
             send("setoption name MultiPV value 2");
@@ -104,6 +105,41 @@ public final class StockfishEngine implements AutoCloseable {
                 ? List.of(pvMatcher.group(1).trim().split("\\s+"))
                 : List.of();
         return new ParsedInfo(multiPv, new EngineVariationResponse(reachedDepth, mate, moves, pawns));
+    }
+
+    /**
+     * Tên engine đọc từ dòng {@code id name} của giao thức UCI. Cache đánh giá
+     * ghi kèm tên này để một lần nâng cấp Stockfish không âm thầm trộn hai
+     * nguồn nhãn khác nhau vào cùng tập dữ liệu.
+     */
+    public String engineName() {
+        return engineName;
+    }
+
+    /** Engine còn dùng lại được không; pool gọi trước khi cho mượn lại. */
+    public boolean healthy() {
+        return process.isAlive();
+    }
+
+    /**
+     * Chuẩn bị engine cho ván kế tiếp. Giữ nguyên bảng băm giữa các vị trí
+     * trong cùng một ván là có lợi, nên chỉ gọi khi bắt đầu một tác vụ mới.
+     */
+    public void newGame() {
+        send("ucinewgame");
+        send("isready");
+        waitFor("readyok", Duration.ofSeconds(15));
+    }
+
+    private void readIdentity(Duration wait) {
+        long deadline = System.nanoTime() + wait.toNanos();
+        while (System.nanoTime() < deadline) {
+            String line = nextLine(deadline);
+            if (line == null) continue;
+            if (line.startsWith("id name ")) engineName = line.substring(8).trim();
+            if ("uciok".equals(line)) return;
+        }
+        throw new IllegalStateException("Stockfish không phản hồi uciok.");
     }
 
     private void waitFor(String expected, Duration wait) {

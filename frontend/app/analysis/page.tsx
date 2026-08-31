@@ -66,14 +66,13 @@ import {
   useStockfish,
 } from "@/lib/use-stockfish";
 import {
-  calculateMoveAccuracy,
-  classifyMove,
   estimateMaterialSacrifice,
   MOVE_ASSESSMENT_META,
   MOVE_ASSESSMENT_ORDER,
   type MoveAssessment,
   type MoveAssessmentKey,
 } from "@/lib/move-classification";
+import { useLiveClassification } from "@/lib/use-live-classification";
 import { type OpeningEntry, type OpeningMatch, useOpeningBook } from "@/lib/use-opening-book";
 import {
   getAvatarImageUrl,
@@ -714,6 +713,28 @@ export default function AnalysisPage() {
   const currentEvaluation = isVariationActive
     ? localCurrentEvaluation ?? backendEvaluationByFen[currentFen]
     : reviewMode ? backendEvaluationByFen[currentFen] : localCurrentEvaluation;
+
+  // Đặc trưng của đường đi đang xem — giống hệt payload gửi cho Game Review,
+  // nhưng cho dòng hiện tại kể cả khi đang ở biến thử.
+  const liveMovePayloads = useMemo(
+    () => moves.map((san, index) => analysisMovePayload({
+      afterFen: positions[index + 1],
+      beforeFen: positions[index],
+      san,
+      theory: Boolean(theoryPositions[index + 1]),
+      theoryName: openingNames[index + 1],
+      uci: uciMoves[index],
+    })),
+    [moves, openingNames, positions, theoryPositions, uciMoves],
+  );
+  const liveEvaluations = useMemo(
+    () => positions.map((fen) => evaluationByFen[fen]),
+    [evaluationByFen, positions],
+  );
+  const liveClassification = useLiveClassification({
+    evaluations: liveEvaluations,
+    moves: liveMovePayloads,
+  });
   const reviewCompleted = archivedReview
     ? reviewTimeline?.positions.length ?? positions.length
     : backendReviewJob?.completedPositions ?? 0;
@@ -791,37 +812,20 @@ export default function AnalysisPage() {
           };
         }
 
-        const positionIndex = moveIndex + 1;
-        // Stored evaluations are always completed engine searches. Interactive
-        // positions finish at depth 16, while review positions may finish at a
-        // lower adaptive depth. Keep both after branching out of Game Review;
-        // otherwise every reviewed label except theory disappears temporarily.
-        const afterEvaluation = evaluationByFen[positions[positionIndex]];
-        const beforeEvaluation = evaluationByFen[positions[positionIndex - 1]];
-
-        return classifyMove({
-          after: afterEvaluation,
-          before: beforeEvaluation,
-          index: positionIndex,
-          isTheory: Boolean(theoryPositions[positionIndex]),
-          playedUci: uciMoves[moveIndex],
-          positions,
-          theoryName: openingNames[positionIndex],
-        });
+        // Nhãn cho phân tích thủ công do backend cấp qua /api/analysis/classify.
+        // Frontend không còn giữ bản sao bộ luật, nên nhãn ở đây và nhãn trong
+        // Game Review chắc chắn khớp nhau.
+        return liveClassification.assessments[moveIndex] ?? null;
       });
     },
     [
       archivedReview,
       backendReviewJob?.result?.moves,
-      evaluationByFen,
       isVariationActive,
+      liveClassification.assessments,
       moves,
-      openingNames,
-      positions,
       reviewComplete,
       reviewMode,
-      theoryPositions,
-      uciMoves,
       variationTimeline?.startIndex,
     ],
   );
@@ -844,39 +848,26 @@ export default function AnalysisPage() {
       };
     }
 
-    const values = { black: [] as number[], white: [] as number[] };
-
-    moves.forEach((_, moveIndex) => {
-      const color = moveIndex % 2 === 0 ? "white" : "black";
-      if (theoryPositions[moveIndex + 1]) {
-        values[color].push(100);
-        return;
-      }
-
-      const before = evaluationByFen[positions[moveIndex]];
-      const after = evaluationByFen[positions[moveIndex + 1]];
-      if (!before || !after) return;
-
-      const accuracy = calculateMoveAccuracy({
-        after,
-        before,
-        beforeFen: positions[moveIndex],
-      });
-      if (accuracy === null) return;
-      values[color].push(accuracy);
-    });
-
-    const average = (numbers: number[]) => numbers.length
-      ? numbers.reduce((sum, value) => sum + value, 0) / numbers.length
-      : null;
-
+    // Accuracy cũng tính ở backend cùng lúc với nhãn, nên công thức
+    // 103.1668·e^(−0.04354·chanceLoss) − 3.1669 chỉ còn tồn tại đúng một chỗ.
+    const labelled = liveClassification.assessments.filter(Boolean).length;
     return {
-      black: average(values.black),
-      blackCount: values.black.length,
-      white: average(values.white),
-      whiteCount: values.white.length,
+      black: liveClassification.blackAccuracy,
+      blackCount: Math.floor(labelled / 2),
+      white: liveClassification.whiteAccuracy,
+      whiteCount: Math.ceil(labelled / 2),
     };
-  }, [archivedReview, backendReviewJob?.result, evaluationByFen, moves, positions, reviewComplete, reviewMode, reviewTimeline?.moves.length, theoryPositions]);
+  }, [
+    archivedReview,
+    backendReviewJob?.result,
+    liveClassification.assessments,
+    liveClassification.blackAccuracy,
+    liveClassification.whiteAccuracy,
+    moves.length,
+    reviewComplete,
+    reviewMode,
+    reviewTimeline?.moves.length,
+  ]);
   const finalOpening = useMemo(
     () => [...openingMatches].reverse().find((entry): entry is OpeningEntry => Boolean(entry)) ?? null,
     [openingMatches],
@@ -1315,6 +1306,9 @@ export default function AnalysisPage() {
           depth: depth || 20,
           moveCount: timelineToSave.moves.length,
           analysisJson,
+          // Backend đọc lại tác vụ này để ghi bảng analyzed_moves; không có nó
+          // thì ván vẫn lưu được, chỉ là không vào tập dữ liệu phân tích.
+          analysisJobId: backendReviewJob?.publicId ?? null,
         }),
       });
       setSavedGameId(result.id);

@@ -21,17 +21,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class AnalysisJobService {
     private final AnalysisJobRepository jobs;
-    private final AnalysisWorker worker;
+    private final AnalysisJobQueue queue;
+    private final AnalysisJobStateService state;
     private final AuthService authService;
     private final ObjectMapper objectMapper;
 
     public AnalysisJobService(
             AnalysisJobRepository jobs,
-            AnalysisWorker worker,
+            AnalysisJobQueue queue,
+            AnalysisJobStateService state,
             AuthService authService,
             ObjectMapper objectMapper) {
         this.jobs = jobs;
-        this.worker = worker;
+        this.queue = queue;
+        this.state = state;
         this.authService = authService;
         this.objectMapper = objectMapper;
     }
@@ -43,7 +46,15 @@ public class AnalysisJobService {
         AnalysisJob job = jobs.saveAndFlush(new AnalysisJob(
                 UUID.randomUUID().toString(), user, request.sourceType(), request.positions().size(),
                 request.minDepth(), request.maxDepth(), serializeRequest(request), now));
-        worker.process(job.getId(), request);
+        try {
+            queue.submit(job.getId(), request);
+        } catch (RuntimeException exception) {
+            // Bản ghi job đã commit trước khi xếp hàng, nên khi hàng đợi từ chối
+            // phải đánh dấu thất bại ngay; nếu không job nằm mãi ở QUEUED và
+            // frontend poll vô tận.
+            state.fail(job.getId(), exception.getMessage());
+            throw exception;
+        }
         return toResponse(job);
     }
 

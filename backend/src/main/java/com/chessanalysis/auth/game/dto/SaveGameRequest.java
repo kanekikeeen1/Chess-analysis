@@ -25,4 +25,9 @@ public record SaveGameRequest(
         @Max(value = 1000, message = "Depth không được lớn hơn 1000.")
         Integer depth,
         @Min(0) @Max(1000) Integer moveCount,
-        @NotBlank @Size(max = 4000000) String analysisJson) {}
+        @NotBlank @Size(max = 4000000) String analysisJson,
+        /**
+         * Mã tác vụ review đã sinh ra báo cáo này. Không bắt buộc: khi có, backend
+         * đọc lại đặc trưng từng nước từ tác vụ đó để ghi bảng analyzed_moves.
+         */
+        @Size(max = 36) String analysisJobId) {}

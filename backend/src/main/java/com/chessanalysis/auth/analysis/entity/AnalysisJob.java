@@ -127,6 +127,7 @@ public class AnalysisJob {
     public int getMinDepth() { return minDepth; }
     public int getMaxDepth() { return maxDepth; }
     public Integer getCurrentPosition() { return currentPosition; }
+    public String getRequestJson() { return requestJson; }
     public String getResultJson() { return resultJson; }
     public String getErrorMessage() { return errorMessage; }
     public Instant getCreatedAt() { return createdAt; }

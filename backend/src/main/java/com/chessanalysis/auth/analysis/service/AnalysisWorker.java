@@ -5,7 +5,6 @@ import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import com.chessanalysis.auth.analysis.dto.AnalysisMoveRequest;
@@ -14,8 +13,6 @@ import com.chessanalysis.auth.analysis.dto.CreateAnalysisJobRequest;
 import com.chessanalysis.auth.analysis.dto.EngineVariationResponse;
 import com.chessanalysis.auth.analysis.dto.MoveReviewResponse;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
-import com.chessanalysis.auth.analysis.engine.StockfishEngine;
-import com.chessanalysis.auth.analysis.engine.StockfishEngineFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -23,28 +20,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class AnalysisWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(AnalysisWorker.class);
 
-    private final StockfishEngineFactory engines;
+    private final EngineAnalysisService engineAnalysis;
     private final AnalysisClassifier classifier;
     private final AnalysisJobStateService state;
     private final ObjectMapper objectMapper;
 
     public AnalysisWorker(
-            StockfishEngineFactory engines,
+            EngineAnalysisService engineAnalysis,
             AnalysisClassifier classifier,
             AnalysisJobStateService state,
             ObjectMapper objectMapper) {
-        this.engines = engines;
+        this.engineAnalysis = engineAnalysis;
         this.classifier = classifier;
         this.state = state;
         this.objectMapper = objectMapper;
     }
 
-    @Async("analysisExecutor")
+    /**
+     * Chạy đồng bộ trên luồng của {@link AnalysisJobQueue}. Trước đây phương
+     * thức này mang {@code @Async}, nghĩa là không có cách nào biết còn bao
+     * nhiêu tác vụ đang chờ hay từ chối lịch sự khi quá tải.
+     */
     public void process(Long jobId, CreateAnalysisJobRequest request) {
         state.markRunning(jobId);
         List<PositionEvaluationResponse> evaluations = new ArrayList<>();
 
-        try (StockfishEngine engine = engines.open()) {
+        try (EngineAnalysisService.Session session = engineAnalysis.openSession()) {
             for (int index = 0; index < request.positions().size(); index++) {
                 String fen = request.positions().get(index);
                 int depth = targetDepth(request, index, fen);
@@ -64,7 +65,7 @@ public class AnalysisWorker {
                     evaluation = new PositionEvaluationResponse(
                             index, fen, depth, mate, List.of(), winningScore, terminalVariations);
                 } else {
-                    evaluation = engine.analyze(fen, depth, index);
+                    evaluation = session.analyze(fen, depth, index);
                 }
                 evaluations.add(evaluation);
                 AnalysisResultResponse partial = new AnalysisResultResponse(
@@ -81,6 +82,8 @@ public class AnalysisWorker {
                     List.copyOf(evaluations), reviewedMoves, whiteAccuracy, blackAccuracy,
                     averageDepth(evaluations));
             state.complete(jobId, json(result));
+            LOGGER.info("Tác vụ {} xong: {} vị trí, {} lấy từ cache, {} lần chạy engine",
+                    jobId, request.positions().size(), session.cacheHits(), session.engineRuns());
         } catch (Exception exception) {
             LOGGER.error("Analysis job {} failed", jobId, exception);
             state.fail(jobId, rootMessage(exception));

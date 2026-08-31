@@ -8,23 +8,21 @@ import com.chessanalysis.auth.analysis.dto.EngineVariationResponse;
 import com.chessanalysis.auth.analysis.dto.EvaluateMoveRequest;
 import com.chessanalysis.auth.analysis.dto.EvaluateMoveResponse;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
-import com.chessanalysis.auth.analysis.engine.StockfishEngine;
-import com.chessanalysis.auth.analysis.engine.StockfishEngineFactory;
 
 @Service
 public class MoveEvaluationService {
-    private final StockfishEngineFactory engines;
+    private final EngineAnalysisService engineAnalysis;
     private final AnalysisClassifier classifier;
 
-    public MoveEvaluationService(StockfishEngineFactory engines, AnalysisClassifier classifier) {
-        this.engines = engines;
+    public MoveEvaluationService(EngineAnalysisService engineAnalysis, AnalysisClassifier classifier) {
+        this.engineAnalysis = engineAnalysis;
         this.classifier = classifier;
     }
 
     public EvaluateMoveResponse evaluate(EvaluateMoveRequest request) {
         int depth = request.depth() == null ? 18 : Math.max(16, Math.min(20, request.depth()));
-        try (StockfishEngine engine = engines.open()) {
-            PositionEvaluationResponse before = engine.analyze(request.beforeFen(), depth, 0);
+        try (EngineAnalysisService.Session session = engineAnalysis.openSession()) {
+            PositionEvaluationResponse before = session.analyze(request.beforeFen(), depth, 0);
             boolean whiteMoved = request.beforeFen().split("\\s+")[1].equals("w");
             PositionEvaluationResponse after;
             if (request.checkmate()) {
@@ -35,7 +33,7 @@ public class MoveEvaluationService {
                 after = new PositionEvaluationResponse(
                         1, request.afterFen(), depth, mate, List.of(), winningScore, List.of(terminal));
             } else {
-                after = engine.analyze(request.afterFen(), depth, 1);
+                after = session.analyze(request.afterFen(), depth, 1);
             }
             String bestMove = before.moves().isEmpty() ? null : before.moves().get(0);
             String opponentReply = after.moves().isEmpty() ? null : after.moves().get(0);

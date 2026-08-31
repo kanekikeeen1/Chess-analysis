@@ -118,23 +118,11 @@ public class AnalysisClassifier {
     }
 
     public double accuracy(double before, double after, boolean whiteMoved) {
-        double chanceLoss = chanceLoss(before, after, whiteMoved);
-        return clamp(103.1668 * Math.exp(-0.04354 * chanceLoss) - 3.1669, 0, 100);
+        return EvaluationMath.accuracy(before, after, whiteMoved);
     }
 
     private double chanceLoss(double before, double after, boolean whiteMoved) {
-        double beforeChance = whiteWinPercent(before);
-        double afterChance = whiteWinPercent(after);
-        return Math.max(0, whiteMoved ? beforeChance - afterChance : afterChance - beforeChance);
-    }
-
-    private double whiteWinPercent(double pawns) {
-        double centipawns = clamp(pawns * 100, -1000, 1000);
-        return 100 / (1 + Math.exp(-0.00368208 * centipawns));
-    }
-
-    private double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+        return EvaluationMath.chanceLoss(before, after, whiteMoved);
     }
 
     private String normalize(String uci) {

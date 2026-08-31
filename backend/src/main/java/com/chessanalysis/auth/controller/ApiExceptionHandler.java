@@ -13,6 +13,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.chessanalysis.auth.analysis.engine.EngineUnavailableException;
 import com.chessanalysis.auth.dto.ApiError;
 import com.chessanalysis.auth.service.ApiException;
 
@@ -23,6 +24,14 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ApiError> handleApiException(ApiException exception) {
         return ResponseEntity.status(exception.getStatus())
+                .body(new ApiError(exception.getMessage()));
+    }
+
+    @ExceptionHandler(EngineUnavailableException.class)
+    ResponseEntity<ApiError> handleEngineUnavailable(EngineUnavailableException exception) {
+        // Quá tải là trạng thái bình thường của một pool có giới hạn, không phải
+        // lỗi máy chủ; trả 503 để frontend biết là nên thử lại.
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(new ApiError(exception.getMessage()));
     }
 

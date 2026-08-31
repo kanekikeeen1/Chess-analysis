@@ -3,10 +3,16 @@ package com.chessanalysis.auth.game.service;
 import java.time.Instant;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.chessanalysis.auth.analysis.dto.AnalysisResultResponse;
+import com.chessanalysis.auth.analysis.dto.CreateAnalysisJobRequest;
+import com.chessanalysis.auth.analysis.entity.AnalysisJob;
+import com.chessanalysis.auth.analysis.repository.AnalysisJobRepository;
 import com.chessanalysis.auth.entity.UserAccount;
 import com.chessanalysis.auth.game.dto.GameDetailResponse;
 import com.chessanalysis.auth.game.dto.GameSummaryResponse;
@@ -15,15 +21,29 @@ import com.chessanalysis.auth.game.entity.AnalyzedGame;
 import com.chessanalysis.auth.game.repository.AnalyzedGameRepository;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 public class GameArchiveService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GameArchiveService.class);
+
     private final AnalyzedGameRepository games;
     private final AuthService authService;
+    private final AnalysisJobRepository jobs;
+    private final AnalyzedMoveWriter moveWriter;
+    private final ObjectMapper objectMapper;
 
-    public GameArchiveService(AnalyzedGameRepository games, AuthService authService) {
+    public GameArchiveService(
+            AnalyzedGameRepository games,
+            AuthService authService,
+            AnalysisJobRepository jobs,
+            AnalyzedMoveWriter moveWriter,
+            ObjectMapper objectMapper) {
         this.games = games;
         this.authService = authService;
+        this.jobs = jobs;
+        this.moveWriter = moveWriter;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -48,7 +68,30 @@ public class GameArchiveService {
                 request.moveCount(),
                 request.analysisJson(),
                 Instant.now());
-        return toDetail(games.saveAndFlush(game));
+        AnalyzedGame saved = games.saveAndFlush(game);
+        indexMoves(saved, user.getId(), request.analysisJobId());
+        return toDetail(saved);
+    }
+
+    /**
+     * Ghi bảng analyzed_moves từ tác vụ review tương ứng. Lỗi ở đây không được
+     * làm hỏng việc lưu ván: người dùng vẫn phải có báo cáo của mình, dữ liệu
+     * cho phần học máy chỉ là phần thêm.
+     */
+    private void indexMoves(AnalyzedGame game, Long userId, String analysisJobId) {
+        if (analysisJobId == null || analysisJobId.isBlank()) return;
+        try {
+            AnalysisJob job = jobs.findByPublicId(analysisJobId.trim()).orElse(null);
+            if (job == null || job.getResultJson() == null || job.getResultJson().isBlank()) return;
+            CreateAnalysisJobRequest jobRequest =
+                    objectMapper.readValue(job.getRequestJson(), CreateAnalysisJobRequest.class);
+            AnalysisResultResponse result =
+                    objectMapper.readValue(job.getResultJson(), AnalysisResultResponse.class);
+            int written = moveWriter.write(game.getId(), userId, jobRequest.moves(), result);
+            LOGGER.debug("Đã ghi {} nước đi cho ván {}", written, game.getId());
+        } catch (Exception exception) {
+            LOGGER.warn("Không lập chỉ mục được nước đi cho ván {}", game.getId(), exception);
+        }
     }
 
     @Transactional(readOnly = true)
