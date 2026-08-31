@@ -1,0 +1,49 @@
+# Cấu hình huấn luyện M2 — mạng chính sách có điều kiện Elo.
+#
+#   python -m m2.train --config config/m2.yaml
+#
+# Mặc định nhắm tới một GPU đơn loại T4/P100 (Colab, Kaggle) với khoảng
+# 5 triệu vị trí. Trên T4, mỗi epoch mất chừng 2,5–3,5 giờ.
+#
+# Nếu GPU nhỏ hơn 16 GB: giảm batch_size xuống 256 và channels xuống 96.
+# Nếu có GPU mạnh hơn: tăng blocks lên 12–16, đó là hướng cho kết quả tốt nhất.
+
+data_dir: data/m2
+run_dir: runs/m2-baseline
+
+batch_size: 512
+epochs: 4
+lr: 0.002
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 2000
+grad_clip: 1.0
+
+# Value head là nhiệm vụ phụ trợ: nó ép mạng học biểu diễn thế cờ có ý nghĩa
+# chứ không chỉ ghi nhớ mẫu nước đi. Trọng số nhỏ vì mục tiêu chính vẫn là
+# policy; đặt 0 để tắt hẳn.
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 6
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 2000
+eval_batches: 60
+log_every: 100
+save_every: 5000
+val_rows: 60000
+
+amp: true
+seed: 1337
+max_steps: null
+
+model:
+  channels: 128
+  blocks: 10
+  elo_dim: 64
+  policy_channels: 32
+  value_channels: 16
+  value_head: true
+  dropout: 0.0

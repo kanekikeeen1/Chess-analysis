@@ -1,0 +1,15 @@
+# Dữ liệu và đầu ra huấn luyện — không đưa vào git.
+data/
+runs/
+models/
+*.pgn
+*.pgn.zst
+*.parquet
+*.onnx
+*.onnx.data
+*.pt
+
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/

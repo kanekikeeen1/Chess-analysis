@@ -1,0 +1,61 @@
+# Cấu hình huấn luyện M2 cho RTX 3050 Mobile (4 GB VRAM, 12 luồng CPU, 16 GB RAM).
+#
+#   python -m m2.train --config config/m2-rtx3050.yaml
+#
+# Đây là cấu hình AN TOÀN, không phải cấu hình bắt buộc. Mô hình chỉ khoảng
+# 6–7 triệu tham số, nên ngay cả config/m2.yaml (batch 512, 128 kênh) nhiều khả
+# năng vẫn vừa 4 GB. Cấu hình này chừa sẵn biên độ cho vùng đệm cuDNN và phân
+# mảnh bộ nhớ, và chỉnh vài thứ hợp với laptop hơn:
+#
+#   batch_size 512 → 192   an toàn hơn, kèm lr giảm theo
+#   channels   128 → 112   chừa biên VRAM
+#   num_workers  6 → 5     khớp 12 luồng CPU, chừa chỗ cho tiến trình chính
+#   save_every 5000 → 2000 phiên trên laptop hay bị cắt giữa chừng
+#
+# Muốn chạy nhanh hơn: cứ thử config/m2.yaml trước và theo dõi `nvidia-smi`
+# trong lúc train. Nếu OOM thì hạ batch_size xuống 256 rồi 128 — hạ batch luôn
+# hiệu quả hơn hạ channels. Giữ blocks ở 10: độ sâu ảnh hưởng chất lượng nhiều
+# hơn bề rộng và tốn VRAM ít hơn hẳn.
+#
+# Thời gian mỗi epoch phụ thuộc máy, đừng đoán: sau 100 bước đầu log đã in
+# `mẫu/s`, lấy số vị trí chia cho đó là ra. Với ~5 triệu vị trí thì mỗi epoch
+# khoảng 26.000 bước ở batch 192.
+
+data_dir: data/m2
+run_dir: runs/m2-rtx3050
+
+batch_size: 192
+epochs: 4
+lr: 0.0012          # giảm theo batch nhỏ hơn, xấp xỉ quy tắc tuyến tính
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 3000
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+# 12 luồng CPU: 5 worker nạp dữ liệu là đủ để GPU không phải chờ, mã hóa chỉ
+# tốn ~25 µs mỗi mẫu. Tăng thêm chỉ ăn RAM chứ không nhanh hơn.
+num_workers: 5
+shuffle_buffer: 30000
+prefetch_factor: 4
+
+eval_every: 2000
+eval_batches: 60
+log_every: 100
+save_every: 2000    # lưu dày hơn vì phiên hay bị cắt trên laptop
+val_rows: 40000
+
+amp: true           # bắt buộc bật: giảm gần một nửa VRAM trên GPU Ampere
+seed: 1337
+max_steps: null
+
+model:
+  channels: 112
+  blocks: 10
+  elo_dim: 64
+  policy_channels: 32
+  value_channels: 16
+  value_head: true
+  dropout: 0.0

@@ -1,11 +1,41 @@
-# Pipeline dữ liệu M0 và mô hình M1.
-# M2 cần thêm torch; cài riêng theo hướng dẫn của PyTorch cho đúng CUDA.
-python-chess==1.999
-zstandard==0.23.0
-pyarrow==18.1.0
-pandas==2.2.3
-numpy==2.1.3
+# Pipeline dữ liệu M0/M2 và mô hình M1/M2.
+#
+# Các phiên bản dưới đây là bản đã thực sự chạy qua toàn bộ chuỗi
+# prepare → train → evaluate → export trên Python 3.14.
+#
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#   pip install torch --index-url https://download.pytorch.org/whl/cu124   # xem ghi chú M2
+
+chess==1.11.2
+zstandard==0.25.0
+pyarrow==25.0.1
+numpy==2.5.2
+PyYAML==6.0.3
 tqdm==4.67.1
-PyYAML==6.0.2
+
+# M1 — phân loại chất lượng nước đi
+pandas==2.2.3
 scikit-learn==1.6.0
 lightgbm==4.5.0
+
+# --- M2: mạng chính sách có điều kiện Elo -------------------------------
+#
+# KHÔNG cài torch từ file này. Bánh xe torch phụ thuộc phiên bản CUDA của máy,
+# nên phải cài riêng theo hướng dẫn tại https://pytorch.org/get-started/locally/
+#
+# Chọn index theo phiên bản CUDA của driver (`nvidia-smi` in ở góc trên bên phải):
+#
+#   CUDA 13.x:  pip install torch --index-url https://download.pytorch.org/whl/cu130
+#   CUDA 12.6:  pip install torch --index-url https://download.pytorch.org/whl/cu126
+#   Chỉ CPU:    pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+# Lưu ý với Python 3.14: các index cũ (cu124, cu128) CHƯA có wheel và sẽ báo
+# "No matching distribution found". Dùng cu126, cu129 hoặc cu130.
+#
+# Đã kiểm tra với torch 2.13.0. onnxscript là bắt buộc: bộ xuất ONNX mặc định
+# của torch>=2.9 (dynamo) không chạy nếu thiếu nó.
+onnxruntime==1.29.0
+onnxscript==0.7.1
+
+pytest==9.1.1
