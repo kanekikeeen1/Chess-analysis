@@ -14,6 +14,7 @@ import com.chessanalysis.auth.analysis.dto.CreateAnalysisJobRequest;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
 import com.chessanalysis.auth.analysis.entity.AnalysisJob;
 import com.chessanalysis.auth.analysis.repository.AnalysisJobRepository;
+import com.chessanalysis.auth.chess.GameReplayService;
 import com.chessanalysis.auth.entity.UserAccount;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
@@ -26,6 +27,7 @@ public class AnalysisJobService {
     private final AnalysisJobQueue queue;
     private final AnalysisJobStateService state;
     private final AuthService authService;
+    private final GameReplayService replay;
     private final ObjectMapper objectMapper;
 
     public AnalysisJobService(
@@ -33,16 +35,20 @@ public class AnalysisJobService {
             AnalysisJobQueue queue,
             AnalysisJobStateService state,
             AuthService authService,
+            GameReplayService replay,
             ObjectMapper objectMapper) {
         this.jobs = jobs;
         this.queue = queue;
         this.state = state;
         this.authService = authService;
+        this.replay = replay;
         this.objectMapper = objectMapper;
     }
 
-    public AnalysisJobResponse create(String token, CreateAnalysisJobRequest request) {
-        validateTimeline(request);
+    public AnalysisJobResponse create(String token, CreateAnalysisJobRequest clientRequest) {
+        validateTimeline(clientRequest);
+        // Từ đây chỉ dùng bản đã được server đi lại và tính lại đặc trưng.
+        CreateAnalysisJobRequest request = replay.verify(clientRequest);
         UserAccount user = authService.currentAccountOrNull(token);
         Instant now = Instant.now();
         AnalysisJob job = jobs.saveAndFlush(new AnalysisJob(

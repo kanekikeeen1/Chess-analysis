@@ -130,6 +130,7 @@ public class AnalysisJob {
 
     public Long getId() { return id; }
     public String getPublicId() { return publicId; }
+    public Long getUserId() { return user == null ? null : user.getId(); }
     public String getSourceType() { return sourceType; }
     public String getStatus() { return status; }
     public int getProgressPercent() { return progressPercent; }

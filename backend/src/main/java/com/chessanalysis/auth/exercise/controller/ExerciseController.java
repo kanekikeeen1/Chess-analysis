@@ -14,22 +14,26 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.chessanalysis.auth.exercise.dto.ExerciseAttemptRequest;
-import com.chessanalysis.auth.exercise.dto.ExerciseAttemptResponse;
+import com.chessanalysis.auth.exercise.dto.ExerciseMoveRequest;
+import com.chessanalysis.auth.exercise.dto.ExerciseMoveResponse;
 import com.chessanalysis.auth.exercise.dto.ExerciseProgressResponse;
 import com.chessanalysis.auth.exercise.dto.ExerciseResponse;
-import com.chessanalysis.auth.exercise.dto.ExercisePositionResponse;
+import com.chessanalysis.auth.exercise.dto.ExerciseSessionResponse;
+import com.chessanalysis.auth.exercise.dto.StartExerciseSessionRequest;
 import com.chessanalysis.auth.exercise.service.ExerciseService;
+import com.chessanalysis.auth.exercise.service.ExerciseSessionService;
 import com.chessanalysis.auth.web.SessionCookieReader;
 
 @RestController
 @RequestMapping("/api/exercises")
 public class ExerciseController {
     private final ExerciseService exercises;
+    private final ExerciseSessionService sessions;
     private final SessionCookieReader cookies;
 
-    public ExerciseController(ExerciseService exercises, SessionCookieReader cookies) {
+    public ExerciseController(ExerciseService exercises, ExerciseSessionService sessions, SessionCookieReader cookies) {
         this.exercises = exercises;
+        this.sessions = sessions;
         this.cookies = cookies;
     }
 
@@ -43,18 +47,23 @@ public class ExerciseController {
         return exercises.get(slug);
     }
 
-    @GetMapping("/{slug}/positions/random")
-    public ExercisePositionResponse randomPosition(@PathVariable String slug) {
-        return exercises.randomPosition(slug);
+    /** Bắt đầu một phiên tàn cuộc: thế ngẫu nhiên, hoặc chơi lại đúng {@code positionId}. */
+    @PostMapping("/{slug}/sessions")
+    public ResponseEntity<ExerciseSessionResponse> startSession(
+            @PathVariable String slug,
+            @RequestBody(required = false) StartExerciseSessionRequest request,
+            HttpServletRequest servletRequest) {
+        Long positionId = request == null ? null : request.positionId();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(sessions.start(cookies.read(servletRequest), slug, positionId));
     }
 
-    @PostMapping("/{slug}/attempts")
-    public ResponseEntity<ExerciseAttemptResponse> recordAttempt(
-            @PathVariable String slug,
-            @Valid @RequestBody ExerciseAttemptRequest request,
+    @PostMapping("/sessions/{sessionId}/moves")
+    public ExerciseMoveResponse move(
+            @PathVariable String sessionId,
+            @Valid @RequestBody ExerciseMoveRequest request,
             HttpServletRequest servletRequest) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(exercises.recordAttempt(cookies.read(servletRequest), slug, request));
+        return sessions.move(cookies.read(servletRequest), sessionId, request.uci());
     }
 
     @GetMapping("/progress/me")

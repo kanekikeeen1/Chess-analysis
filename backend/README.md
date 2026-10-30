@@ -35,10 +35,12 @@ Nếu chạy backend trực tiếp bằng IntelliJ thay vì Docker, cài Stockfi
 | Phương thức | Endpoint | Nghiệp vụ |
 | --- | --- | --- |
 | `POST` | `/api/analysis/jobs` | Tạo tác vụ Game Review PGN/FEN |
-| `GET` | `/api/analysis/jobs/{publicId}` | Đọc tiến độ và kết quả từng phần |
-| `POST` | `/api/analysis/evaluate-move` | Chấm một nước bài tập, xử lý cả chiếu hết và trả nước tốt nhất/PV |
+| `GET` | `/api/analysis/jobs/{publicId}?from=k` | Đọc tiến độ và các đánh giá mới từ vị trí `k` |
+| `POST` | `/api/analysis/classify` | Gán nhãn cho các nước đã có đánh giá Stockfish WASM (phân tích tay) |
 
-Backend phân tích đủ mọi vị trí. Chế độ Nhanh dùng depth 10 cho khai cuộc, 12–13 cho trung cuộc và 14 cho FEN/tàn cuộc; chế độ Sâu tương ứng là 16, 18–19 và 20. Mỗi vị trí hoàn tất sẽ cập nhật `progress_percent` và `result_json`; trình duyệt chỉ cần thăm dò endpoint tiến độ.
+Trước khi xếp hàng, backend dùng `chesslib` đi lại toàn bộ ván: mỗi nước phải hợp lệ, mỗi vị trí phải khớp với vị trí do server tự đi ra, và các đặc trưng nước đi (bắt quân, chiếu, chiếu hết, phong cấp, số nước hợp lệ, thí quân) đều do server tính lại. Client chỉ còn gửi gợi ý `theory`, và bộ gán nhãn chỉ công nhận nó khi engine cũng xác nhận.
+
+Backend phân tích đủ mọi vị trí. Chế độ Nhanh dùng depth 10 cho khai cuộc, 12 cho trung cuộc và 14 cho FEN/tàn cuộc; chế độ Sâu tương ứng là 16, 18 và 20. Mỗi vị trí hoàn tất sẽ cập nhật `progress_percent` và `result_json`; trình duyệt chỉ cần thăm dò endpoint tiến độ.
 
 Vị trí cuối đã chiếu hết được backend kết thúc trực tiếp ở ±100 thay vì tiếp tục chờ một PV không tồn tại từ `bestmove (none)`. Vì vậy PGN có dấu `#` vẫn hoàn tất job và trả nhãn `Best` đúng cách.
 
@@ -146,9 +148,11 @@ Ví dụ phần thân khi lưu:
 | --- | --- | --- | --- |
 | `GET` | `/api/exercises` | Công khai | Danh sách 30 khai cuộc + 10 tàn cuộc |
 | `GET` | `/api/exercises/{slug}` | Công khai | Nội dung một bài |
-| `GET` | `/api/exercises/{slug}/positions/random` | Công khai | Lấy ngẫu nhiên một thế tàn cuộc |
-| `POST` | `/api/exercises/{slug}/attempts` | Đăng nhập | Lưu điểm/lần làm |
+| `POST` | `/api/exercises/{slug}/sessions` | Công khai | Bắt đầu phiên tàn cuộc (thế ngẫu nhiên, hoặc `{"positionId": …}` để chơi lại) |
+| `POST` | `/api/exercises/sessions/{sessionId}/moves` | Chủ phiên | Đi một nước `{"uci": "e2e4"}`; server chấm, đi nước đáp, xác định mục tiêu và điểm |
 | `GET` | `/api/exercises/progress/me` | Đăng nhập | Tổng hợp tiến trình và điểm tốt nhất |
+
+Không còn endpoint để client tự nộp điểm: lượt làm bài chỉ được ghi vào `exercise_attempts` khi server xác nhận hoàn thành, với điểm `max(40, 100 − 15 × số nước sai)`.
 
 ## Bảng dữ liệu
 
@@ -159,6 +163,7 @@ Ví dụ phần thân khi lưu:
 - `exercise_lessons`: kho nội dung bài tập do backend quản lý.
 - `exercise_attempts`: lịch sử và điểm luyện tập của người dùng.
 - `exercise_positions`: ngân hàng thế tàn cuộc theo mục tiêu.
+- `exercise_sessions`: phiên làm bài tàn cuộc do server giữ trạng thái (nước đã đi, số nước sai, kết quả).
 - `analysis_jobs`: hàng đợi, tiến độ và kết quả Stockfish của PGN/FEN.
 
 ## Cấu hình production

@@ -42,11 +42,30 @@ export type ExerciseProgress = {
   bestScores: Record<string, number>;
 };
 
-export type ExercisePosition = {
-  id: number;
-  lessonSlug: string;
-  startingFen: string;
+/** Phiên làm một thế tàn cuộc; server giữ trạng thái, đi nước đáp và tự chấm điểm. */
+export type ExerciseSession = {
+  sessionId: string;
+  lessonSlug: string | null;
+  positionId: number;
   goalType: "CHECKMATE" | "PROMOTE" | "WIN_ROOK" | "DRAW";
+  playerSide: "w" | "b";
+  startingFen: string;
+  currentFen: string;
+  status: "ACTIVE" | "COMPLETED" | "FAILED";
+  mistakes: number;
+  acceptedMoves: number;
+  score: number | null;
+};
+
+export type ExerciseMoveResult = {
+  session: ExerciseSession;
+  accepted: boolean;
+  playedUci: string;
+  assessmentKey: string;
+  detail: string;
+  bestMove: string | null;
+  opponentReply: string | null;
+  message: string | null;
 };
 
 export type BackendEngineVariation = {
@@ -129,16 +148,6 @@ export type CreateAnalysisJobPayload = {
   openingName: string | null;
   minDepth: 10 | 16;
   maxDepth: 14 | 20;
-};
-
-export type EvaluateMoveResult = {
-  assessmentKey: string;
-  detail: string;
-  loss: number;
-  bestMove: string | null;
-  opponentReply: string | null;
-  before: BackendPositionEvaluation;
-  after: BackendPositionEvaluation;
 };
 
 export type ClassifyMovesResult = {

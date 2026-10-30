@@ -50,13 +50,16 @@ src/main/java/com/chessanalysis/auth/ChessAnalysisBackendApplication.java
 
 Backend sẵn sàng khi log có `Started ChessAnalysisBackendApplication`, tại `http://localhost:8080`.
 
-Flyway tự áp dụng bảy migration:
+Flyway tự áp dụng các migration:
 
 - `V1–V3`: tài khoản, phiên đăng nhập và avatar.
 - `V4`: kho báo cáo `analyzed_games`.
 - `V5`: bài học `exercise_lessons` và lịch sử `exercise_attempts`.
 - `V6`: tác vụ Stockfish bất đồng bộ `analysis_jobs`.
 - `V7`: ngân hàng thế cờ ngẫu nhiên `exercise_positions`.
+- `V8–V11`: dữ liệu từng nước `analyzed_moves`, cache `position_evaluations`, hồ sơ kỹ năng.
+- `V12`: sửa 10 thế tàn cuộc sai luật hoặc sai nội dung trong V5/V7.
+- `V13`: phiên làm bài tàn cuộc `exercise_sessions` do server giữ trạng thái.
 
 Nếu chạy Spring Boot trực tiếp trong IntelliJ, tải Stockfish cho Windows rồi thêm biến môi trường vào Run Configuration:
 

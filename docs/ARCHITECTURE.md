@@ -77,7 +77,41 @@ Trung bình cộng thông thường (cách cũ) thổi phồng accuracy của c�
 
 ## Luồng bài tập tàn cuộc
 
-Backend chọn ngẫu nhiên một hàng trong `exercise_positions`. Người dùng đi nước hợp lệ trên frontend; Spring Boot gọi Stockfish depth 20 để so nước đã đi với PV1 và ưu tiên đường chiếu hết nhanh. Kết quả được hiển thị bằng cùng hệ icon nhãn của trang phân tích và gắn ở góc trên bên phải ô đích. Với nước chưa chuẩn, frontend giữ nguyên vị trí và hiển thị nước tốt nhất có thể bấm để triển khai. Với nước được chấp nhận, PV1 của thế sau được dùng làm nước đáp của Stockfish. Khi đạt mục tiêu chiếu hết, phong cấp, thắng xe hoặc hòa, backend lưu điểm vào `exercise_attempts` nếu người dùng đã đăng nhập.
+Bài tàn cuộc chạy hoàn toàn trên server, theo phiên (`exercise_sessions`):
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant B as Spring Boot
+    participant S as Stockfish
+    F->>B: POST /api/exercises/{slug}/sessions
+    B-->>F: sessionId, FEN, mục tiêu, bên cầm quân
+    loop Mỗi nước của người học
+        F->>B: POST /sessions/{id}/moves {uci}
+        B->>B: chesslib: nước hợp lệ? có chiếu hết?
+        B->>S: Đánh giá trước/sau depth 20
+        alt Nước sai (inaccuracy trở xuống)
+            B-->>F: Giữ nguyên vị trí, +1 lỗi, gợi ý PV1
+        else Nước được chấp nhận
+            B->>B: Kiểm tra mục tiêu sau nước người học
+            B->>B: Đi nước đáp = PV1 của thế sau, kiểm tra mục tiêu lần nữa
+            B-->>F: FEN mới, trạng thái ACTIVE / COMPLETED / FAILED, điểm
+        end
+    end
+```
+
+Mục tiêu được kiểm tra hai lần mỗi lượt, lần thứ hai **sau nước đáp** của engine:
+
+| Mục tiêu | Hoàn thành khi |
+| --- | --- |
+| CHECKMATE | Đối phương bị chiếu hết |
+| PROMOTE | Nước được chấp nhận là nước phong cấp |
+| WIN_ROOK | Đối phương hết xe **và** người học vẫn còn hậu (đổi hậu lấy xe không tính) |
+| DRAW | Ván hòa theo luật, hoặc trụ được 10 nước không sai |
+
+Hòa (stalemate, thiếu quân, lặp ba lần) trong bài không phải DRAW, hoặc bị chiếu hết, thì phiên thất bại. Server dựng lại ván từ đầu ở mỗi nước nên phát hiện được lặp ba lần. Khi hoàn thành, server tự tính điểm `max(40, 100 − 15 × số nước sai)` và lưu vào `exercise_attempts` nếu người dùng đã đăng nhập; client không gửi điểm.
+
+Dữ liệu 30 thế tàn cuộc được `EndgameSeedDataTest` dựng lại từ các migration và kiểm tra: FEN hợp lệ, bên đến lượt có nước đi, chưa hòa sẵn, và bài cầm hòa không mở đầu bằng thế chiếu hết một nước.
 
 ## Mô hình dữ liệu chính
 
@@ -89,6 +123,8 @@ erDiagram
     USER_ACCOUNTS ||--o{ EXERCISE_ATTEMPTS : performs
     EXERCISE_LESSONS ||--o{ EXERCISE_POSITIONS : contains
     EXERCISE_LESSONS ||--o{ EXERCISE_ATTEMPTS : receives
+    EXERCISE_POSITIONS ||--o{ EXERCISE_SESSIONS : "is played in"
+    USER_ACCOUNTS ||--o{ EXERCISE_SESSIONS : plays
 ```
 
 Kho ván vẫn được bảo vệ theo `user_id` từ cookie phiên. Analysis job có `public_id` UUID để thăm dò tiến độ mà không lộ khóa tăng dần của database.

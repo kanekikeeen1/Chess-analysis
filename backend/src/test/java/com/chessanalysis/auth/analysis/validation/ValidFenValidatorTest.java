@@ -15,8 +15,9 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import com.chessanalysis.auth.analysis.dto.AnalysisMoveRequest;
 import com.chessanalysis.auth.analysis.dto.CreateAnalysisJobRequest;
-import com.chessanalysis.auth.analysis.dto.EvaluateMoveRequest;
+import com.chessanalysis.auth.exercise.dto.ExerciseMoveRequest;
 
 /** Bảo đảm các DTO đi tới Stockfish thật sự chặn FEN/UCI độc hại ở tầng validate. */
 class ValidFenValidatorTest {
@@ -39,24 +40,22 @@ class ValidFenValidatorTest {
     }
 
     @Test
-    void acceptsWellFormedEvaluateMoveRequest() {
-        assertTrue(validator.validate(new EvaluateMoveRequest(BEFORE, AFTER, "g1g2", false, 20)).isEmpty());
+    void acceptsWellFormedMove() {
+        assertTrue(validator.validate(move(BEFORE, "g1g2")).isEmpty());
     }
 
     @Test
-    void rejectsUciInjectionInEvaluateMoveRequest() {
-        Set<ConstraintViolation<EvaluateMoveRequest>> violations =
-                validator.validate(new EvaluateMoveRequest(INJECTED, AFTER, "g1g2", false, 20));
+    void rejectsUciInjectionInMoveFen() {
+        Set<ConstraintViolation<AnalysisMoveRequest>> violations = validator.validate(move(INJECTED, "g1g2"));
         assertEquals(1, violations.size());
         assertEquals("beforeFen", violations.iterator().next().getPropertyPath().toString());
     }
 
     @Test
     void rejectsMalformedUciMove() {
-        assertEquals(1, validator.validate(
-                new EvaluateMoveRequest(BEFORE, AFTER, "g1g2\nquit", false, 20)).size());
-        assertEquals(1, validator.validate(
-                new EvaluateMoveRequest(BEFORE, AFTER, "z9z9", false, 20)).size());
+        assertEquals(1, validator.validate(move(BEFORE, "z9z9")).size());
+        assertEquals(1, validator.validate(new ExerciseMoveRequest("g1g2\nquit")).size());
+        assertTrue(validator.validate(new ExerciseMoveRequest("e7e8q")).isEmpty());
     }
 
     @Test
@@ -66,5 +65,10 @@ class ValidFenValidatorTest {
         Set<ConstraintViolation<CreateAnalysisJobRequest>> violations = validator.validate(request);
         assertEquals(1, violations.size());
         assertTrue(violations.iterator().next().getPropertyPath().toString().startsWith("positions"));
+    }
+
+    private AnalysisMoveRequest move(String beforeFen, String uci) {
+        return new AnalysisMoveRequest("Rg2", uci, beforeFen, AFTER, false, null,
+                false, false, false, false, false, false, 0.0, "NONE", 20);
     }
 }

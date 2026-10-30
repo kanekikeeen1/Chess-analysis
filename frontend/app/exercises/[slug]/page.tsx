@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Chess, type Color, type Square } from "chess.js";
+import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import {
   ArrowLeft, BookOpenCheck, CheckCircle2, ChevronLeft, ChevronRight,
@@ -11,7 +11,7 @@ import { useParams } from "next/navigation";
 
 import { useAuth } from "@/app/auth-provider";
 import { backendRequest } from "@/lib/backend-api";
-import type { EvaluateMoveResult, ExerciseLesson, ExercisePosition } from "@/lib/domain-types";
+import type { ExerciseLesson, ExerciseMoveResult, ExerciseSession } from "@/lib/domain-types";
 import {
   MOVE_ASSESSMENT_META,
   type MoveAssessmentKey,
@@ -66,24 +66,15 @@ function openingTimeline(line: string) {
   }
 }
 
-function goalReached(game: Chess, goal: ExercisePosition["goalType"], playerColor: Color) {
-  if (goal === "CHECKMATE") return game.isCheckmate() && game.turn() !== playerColor;
-  if (goal === "DRAW") return game.isDraw();
-  if (goal === "WIN_ROOK") {
-    const opponent = playerColor === "w" ? "b" : "w";
-    return !game.board().flat().some((piece) => piece?.color === opponent && piece.type === "r");
-  }
-  return game.board().flat().some((piece) => piece?.color === playerColor && piece.type === "q");
-}
-
 export default function ExerciseDetailPage() {
   const params = useParams<{ slug: string }>();
   const { user } = useAuth();
   const [lesson, setLesson] = useState<ExerciseLesson | null>(null);
   const [error, setError] = useState("");
-  const [position, setPosition] = useState<ExercisePosition | null>(null);
+  // Server giữ trạng thái bài tàn cuộc: kiểm tra nước, đi nước đáp, xác định mục tiêu
+  // và chấm điểm. Trang này chỉ hiển thị phiên mà server trả về.
+  const [session, setSession] = useState<ExerciseSession | null>(null);
   const [fen, setFen] = useState("");
-  const [playerColor, setPlayerColor] = useState<Color>("w");
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [feedback, setFeedback] = useState("");
@@ -91,9 +82,11 @@ export default function ExerciseDetailPage() {
   const [lastMoveSan, setLastMoveSan] = useState("");
   const [lastMoveTarget, setLastMoveTarget] = useState<Square | null>(null);
   const [suggestedMove, setSuggestedMove] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
-  const [mistakes, setMistakes] = useState(0);
   const [openingIndex, setOpeningIndex] = useState(0);
+
+  const playerColor = session?.playerSide ?? "w";
+  const completed = session?.status === "COMPLETED";
+  const finished = Boolean(session && session.status !== "ACTIVE");
 
   useEffect(() => {
     void backendRequest<ExerciseLesson>(`/api/exercises/${params.slug}`)
@@ -108,32 +101,30 @@ export default function ExerciseDetailPage() {
     [lesson],
   );
 
-  async function loadRandomPosition() {
+  /** Bắt đầu phiên mới: thế ngẫu nhiên, hoặc chơi lại đúng thế `positionId`. */
+  async function startSession(positionId?: number) {
     setError("");
-    setFeedback("Đang chọn một thế cờ ngẫu nhiên…");
+    setFeedback(positionId ? "Đang đặt lại thế cờ…" : "Đang chọn một thế cờ ngẫu nhiên…");
     setSuggestedMove(null);
     setAssessmentKey("");
     setLastMoveSan("");
     setLastMoveTarget(null);
-    setCompleted(false);
-    setMistakes(0);
     setSelectedSquare(null);
     try {
-      const next = await backendRequest<ExercisePosition>(
-        `/api/exercises/${params.slug}/positions/random`,
-      );
-      const nextGame = new Chess(next.startingFen);
-      setPosition(next);
-      setFen(nextGame.fen());
-      setPlayerColor(nextGame.turn());
-      setFeedback(`Bạn cầm ${nextGame.turn() === "w" ? "Trắng" : "Đen"}. Hãy tìm nước đi tốt nhất.`);
+      const next = await backendRequest<ExerciseSession>(`/api/exercises/${params.slug}/sessions`, {
+        method: "POST",
+        body: JSON.stringify({ positionId: positionId ?? null }),
+      });
+      setSession(next);
+      setFen(next.currentFen);
+      setFeedback(`Bạn cầm ${next.playerSide === "w" ? "Trắng" : "Đen"}. Hãy tìm nước đi tốt nhất.`);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Không thể tạo thế cờ.");
     }
   }
 
   useEffect(() => {
-    if (lesson?.category === "ENDGAME") void loadRandomPosition();
+    if (lesson?.category === "ENDGAME") void startSession();
     if (lesson?.category === "OPENING") setOpeningIndex(opening.positions.length - 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lesson?.id]);
@@ -155,96 +146,55 @@ export default function ExerciseDetailPage() {
     return styles;
   }, [game, legalTargets, selectedSquare]);
 
-  async function recordCompletedAttempt() {
-    if (!user) return;
-    const score = Math.max(40, 100 - mistakes * 15);
-    try {
-      await backendRequest(`/api/exercises/${params.slug}/attempts`, {
-        method: "POST",
-        body: JSON.stringify({ score, completed: true }),
-      });
-      setFeedback(`Hoàn thành! Điểm ${score}/100 đã được lưu vào tài khoản.`);
-    } catch (caughtError) {
-      setFeedback(caughtError instanceof Error ? caughtError.message : "Đã hoàn thành nhưng chưa lưu được điểm.");
-    }
-  }
-
-  function finishIfReached(nextGame: Chess) {
-    if (!position || !goalReached(nextGame, position.goalType, playerColor)) return false;
-    setFen(nextGame.fen());
-    setCompleted(true);
-    setSuggestedMove(null);
-    setAssessmentKey("best");
-    setFeedback(user
-      ? "Hoàn thành thế tàn cuộc — đang lưu kết quả…"
-      : "Hoàn thành thế tàn cuộc! Đăng nhập để lưu kết quả luyện tập.");
-    void recordCompletedAttempt();
-    return true;
-  }
-
   async function attemptMove(from: Square, to: Square) {
-    if (!position || isEvaluating || completed || game.turn() !== playerColor) return false;
-    const beforeFen = fen;
-    const nextGame = new Chess(beforeFen);
+    if (!session || isEvaluating || finished || game.turn() !== playerColor) return false;
+    let move;
     try {
-      const move = nextGame.move({ from, to, promotion: "q" });
-      const playedUci = `${move.from}${move.to}${move.promotion ?? ""}`;
-      setLastMoveSan(move.san);
-      setLastMoveTarget(move.to);
-      setSelectedSquare(null);
-
-      setIsEvaluating(true);
-      setFeedback("Stockfish depth 20 đang kiểm tra nước đi…");
-      const result = await backendRequest<EvaluateMoveResult>("/api/analysis/evaluate-move", {
-        method: "POST",
-        body: JSON.stringify({
-          afterFen: nextGame.fen(),
-          beforeFen,
-          checkmate: nextGame.isCheckmate(),
-          depth: 20,
-          playedUci,
-        }),
-      });
+      // chess.js chỉ dùng để biết nước có hợp lệ và hiển thị SAN; server kiểm tra lại.
+      move = new Chess(fen).move({ from, to, promotion: "q" });
+    } catch {
+      setFeedback("Nước đi không hợp lệ.");
+      return false;
+    }
+    setLastMoveSan(move.san);
+    setLastMoveTarget(move.to);
+    setSelectedSquare(null);
+    setIsEvaluating(true);
+    setFeedback("Stockfish depth 20 đang kiểm tra nước đi…");
+    try {
+      const result = await backendRequest<ExerciseMoveResult>(
+        `/api/exercises/sessions/${session.sessionId}/moves`,
+        { method: "POST", body: JSON.stringify({ uci: `${move.from}${move.to}${move.promotion ?? ""}` }) },
+      );
       setAssessmentKey(result.assessmentKey);
 
-      if (goalReached(nextGame, position.goalType, playerColor)) {
-        finishIfReached(nextGame);
-        return true;
-      }
-
-      if (!ACCEPTED_KEYS.has(result.assessmentKey)) {
-        setMistakes((value) => value + 1);
+      if (!result.accepted) {
+        setSession(result.session);
         setSuggestedMove(result.bestMove);
         setFeedback(`${ASSESSMENT_LABELS[result.assessmentKey] ?? result.assessmentKey}: ${result.detail}`);
         return true;
       }
 
-      setFen(nextGame.fen());
       setSuggestedMove(null);
-      setFeedback(`${ASSESSMENT_LABELS[result.assessmentKey] ?? "Đúng"}. Stockfish đang đáp lại…`);
-      if (!result.opponentReply || nextGame.isGameOver()) {
-        finishIfReached(nextGame);
-        return true;
+      if (result.opponentReply) {
+        // Hiện nước của người học trước rồi mới tới nước đáp, như một ván thật.
+        setFen(move.after);
+        setFeedback(`${ASSESSMENT_LABELS[result.assessmentKey] ?? "Đúng"}. Stockfish đang đáp lại…`);
+        await new Promise((resolve) => window.setTimeout(resolve, 350));
       }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 350));
-      try {
-        applyUci(nextGame, result.opponentReply);
-        setFen(nextGame.fen());
-        if (!finishIfReached(nextGame)) {
-          setFeedback(`${ASSESSMENT_LABELS[result.assessmentKey] ?? "Đúng"}. Đến lượt bạn.`);
-        }
-      } catch {
-        setFeedback("Nước của bạn đã được chấp nhận. Đến lượt bạn.");
-      }
+      setFen(result.session.currentFen);
+      setSession(result.session);
+      setFeedback(result.message
+        ?? `${ASSESSMENT_LABELS[result.assessmentKey] ?? "Đúng"}. Đến lượt bạn.`);
       return true;
-    } catch {
-      setFeedback("Nước đi không hợp lệ.");
+    } catch (caughtError) {
+      setFeedback(caughtError instanceof Error ? caughtError.message : "Không thể kiểm tra nước đi.");
       return false;
     } finally {
       setIsEvaluating(false);
     }
   }
+
 
   function handleSquareClick(square: string) {
     const clicked = square as Square;
@@ -268,10 +218,10 @@ export default function ExerciseDetailPage() {
   const displayFen = lesson?.category === "OPENING"
     ? opening.positions[openingIndex] ?? opening.positions[0]
     : fen || lesson?.startingFen || new Chess().fen();
-  const goalLabel = position?.goalType === "CHECKMATE" ? "Chiếu hết vua đối phương"
-    : position?.goalType === "PROMOTE" ? "Phong cấp tốt thành hậu"
-      : position?.goalType === "WIN_ROOK" ? "Thắng xe đối phương"
-        : "Giữ được kết quả hòa";
+  const goalLabel = session?.goalType === "CHECKMATE" ? "Chiếu hết vua đối phương"
+    : session?.goalType === "PROMOTE" ? "Phong cấp tốt thành hậu"
+      : session?.goalType === "WIN_ROOK" ? "Thắng xe đối phương và giữ được hậu"
+        : "Giữ được kết quả hòa (trụ 10 nước không sai hoặc đạt thế hòa)";
 
   return (
     <main className="min-h-screen bg-[#111713] px-5 py-8 sm:px-8 lg:px-10">
@@ -308,7 +258,7 @@ export default function ExerciseDetailPage() {
                     </div>
                   ),
                   canDragPiece: ({ piece }: { piece: { pieceType: string } }) =>
-                    lesson.category === "ENDGAME" && !isEvaluating && !completed &&
+                    lesson.category === "ENDGAME" && !isEvaluating && !finished &&
                     piece.pieceType[0]?.toLowerCase() === playerColor && game.turn() === playerColor,
                   onSquareClick: ({ square }: { square: string }) => lesson.category === "ENDGAME" && handleSquareClick(square),
                   onPieceDrag: () => setSelectedSquare(null),
@@ -336,7 +286,7 @@ export default function ExerciseDetailPage() {
                   <div className="rounded-3xl border border-white/9 bg-[#1a211d] p-6">
                     <div className="flex items-center gap-2"><Target className="size-5 text-[#72cf86]" /><h2 className="font-semibold">Thực chiến với Stockfish</h2></div>
                     <p className="mt-3 text-sm leading-6 text-[#96a098]">Mục tiêu: <strong className="text-white">{goalLabel}</strong>. Mỗi nước của bạn được backend Stockfish kiểm tra ở depth 20 để ưu tiên đường chiếu hết nhanh.</p>
-                    <div className={`mt-4 rounded-2xl border p-4 text-sm leading-6 ${completed ? "border-[#72cf86]/30 bg-[#72cf86]/10 text-[#a9e8b7]" : assessmentKey && !ACCEPTED_KEYS.has(assessmentKey) ? "border-[#ef8b3c]/30 bg-[#ef8b3c]/10 text-[#ffc493]" : "border-white/8 bg-white/5 text-[#c7d0c9]"}`}>
+                    <div className={`mt-4 rounded-2xl border p-4 text-sm leading-6 ${completed ? "border-[#72cf86]/30 bg-[#72cf86]/10 text-[#a9e8b7]" : session?.status === "FAILED" ? "border-[#ef6461]/30 bg-[#ef6461]/10 text-[#ffaaa8]" : assessmentKey && !ACCEPTED_KEYS.has(assessmentKey) ? "border-[#ef8b3c]/30 bg-[#ef8b3c]/10 text-[#ffc493]" : "border-white/8 bg-white/5 text-[#c7d0c9]"}`}>
                       <div className="flex items-start gap-3">
                         {isEvaluating
                           ? <LoaderCircle className="mt-1 size-5 shrink-0 animate-spin" />
@@ -355,8 +305,8 @@ export default function ExerciseDetailPage() {
                       {suggestedMove && <button type="button" onClick={playSuggestion} className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#72cf86] px-4 py-2.5 font-semibold text-[#112016]"><Lightbulb className="size-4" /> Chơi nước tốt nhất: {uciToSan(fen, suggestedMove)}</button>}
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void loadRandomPosition()} disabled={isEvaluating} className="inline-flex items-center gap-2 rounded-xl bg-[#4b7fe8] px-4 py-2.5 font-semibold text-white disabled:opacity-50"><RefreshCw className="size-4" /> Thế cờ ngẫu nhiên khác</button>
-                      <button type="button" onClick={() => { if (position) { setFen(position.startingFen); setCompleted(false); setSuggestedMove(null); setAssessmentKey(""); setLastMoveSan(""); setLastMoveTarget(null); setFeedback("Đã đặt lại thế cờ. Đến lượt bạn."); } }} disabled={isEvaluating || !position} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold disabled:opacity-50"><RotateCcw className="size-4" /> Chơi lại</button>
+                      <button type="button" onClick={() => void startSession()} disabled={isEvaluating} className="inline-flex items-center gap-2 rounded-xl bg-[#4b7fe8] px-4 py-2.5 font-semibold text-white disabled:opacity-50"><RefreshCw className="size-4" /> Thế cờ ngẫu nhiên khác</button>
+                      <button type="button" onClick={() => { if (session) void startSession(session.positionId); }} disabled={isEvaluating || !session} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold disabled:opacity-50"><RotateCcw className="size-4" /> Chơi lại</button>
                     </div>
                     {!user && <p className="mt-4 flex items-center gap-2 text-xs text-[#89958d]"><LockKeyhole className="size-4" /> Bạn vẫn luyện bình thường; đăng nhập để lưu điểm và tiến trình.</p>}
                   </div>

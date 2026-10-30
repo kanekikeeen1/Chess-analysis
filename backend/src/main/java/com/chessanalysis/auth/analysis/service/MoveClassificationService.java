@@ -11,6 +11,7 @@ import com.chessanalysis.auth.analysis.dto.ClassifyMovesResponse;
 import com.chessanalysis.auth.analysis.dto.MoveReviewResponse;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationRequest;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
+import com.chessanalysis.auth.chess.GameReplayService;
 import com.chessanalysis.auth.service.ApiException;
 
 /**
@@ -22,9 +23,11 @@ import com.chessanalysis.auth.service.ApiException;
 @Service
 public class MoveClassificationService {
     private final AnalysisClassifier classifier;
+    private final GameReplayService replay;
 
-    public MoveClassificationService(AnalysisClassifier classifier) {
+    public MoveClassificationService(AnalysisClassifier classifier, GameReplayService replay) {
         this.classifier = classifier;
+        this.replay = replay;
     }
 
     public ClassifyMovesResponse classify(ClassifyMovesRequest request) {
@@ -37,7 +40,7 @@ public class MoveClassificationService {
             PositionEvaluationRequest evaluation = request.evaluations().get(index);
             evaluations.add(evaluation.toResponse(index));
         }
-        List<MoveReviewResponse> reviewed = classifier.classify(request.moves(), evaluations);
+        List<MoveReviewResponse> reviewed = classifier.classify(replay.verifyEach(request.moves()), evaluations);
         EvaluationMath.GameAccuracy accuracy = EvaluationMath.gameAccuracy(
                 evaluations.stream().map(PositionEvaluationResponse::pawns).toList(),
                 FenNormalizer.whiteToMove(request.moves().get(0).beforeFen()));
