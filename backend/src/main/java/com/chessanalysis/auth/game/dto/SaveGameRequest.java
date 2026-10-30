@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import com.chessanalysis.auth.analysis.validation.ValidFen;
+
 public record SaveGameRequest(
         @NotBlank @Size(max = 160) String title,
         @NotBlank @Size(max = 100) String whitePlayer,
@@ -15,8 +17,8 @@ public record SaveGameRequest(
         @NotBlank @Size(max = 12) String result,
         @NotBlank @Pattern(regexp = "PGN|FEN", message = "Nguồn phải là PGN hoặc FEN.") String sourceType,
         @Size(max = 1000000) String pgn,
-        @NotBlank @Size(max = 180) String initialFen,
-        @NotBlank @Size(max = 180) String finalFen,
+        @NotBlank @Size(max = 180) @ValidFen String initialFen,
+        @NotBlank @Size(max = 180) @ValidFen String finalFen,
         @Size(max = 12) String openingEco,
         @Size(max = 255) String openingName,
         @DecimalMin("0.0") @DecimalMax("100.0") Double whiteAccuracy,

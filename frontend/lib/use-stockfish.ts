@@ -69,7 +69,9 @@ function scoreFromInfo(line: string, fen: string): StockfishVariation | null {
         depth: Number(depthMatch?.[1] ?? 0),
         mate: whiteScore,
         moves: pvMatch?.[1].trim().split(/\s+/) ?? [],
-        pawns: whiteScore >= 0 ? 100 : -100,
+        // `mate 0`: the side to move is already checkmated, so the sign comes
+        // from whose turn it is rather than from the (unsigned) zero.
+        pawns: rawScore === 0 ? (whiteToMove ? -100 : 100) : whiteScore > 0 ? 100 : -100,
       }
     : {
         depth: Number(depthMatch?.[1] ?? 0),

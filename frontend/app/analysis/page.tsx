@@ -377,7 +377,8 @@ function describePosition(game: Chess) {
 
 function formatEvaluation(evaluation: StockfishVariation) {
   if (evaluation.mate !== null) {
-    return `${evaluation.mate > 0 ? "+" : "−"}M${Math.abs(evaluation.mate)}`;
+    // Dấu lấy từ `pawns` vì `mate 0` (đã bị chiếu hết) không mang dấu.
+    return `${evaluation.pawns > 0 ? "+" : "−"}M${Math.abs(evaluation.mate)}`;
   }
   return `${evaluation.pawns >= 0 ? "+" : ""}${evaluation.pawns.toFixed(2)}`;
 }
@@ -2532,7 +2533,7 @@ function EvaluationBar({
   const whiteHeight = winner
     ? winner === "white" ? 100 : 0
     : evaluation?.mate !== null && evaluation?.mate !== undefined
-      ? evaluation.mate > 0
+      ? score > 0
         ? 96
         : 4
       : Math.max(5, Math.min(95, 50 + score * 10));
@@ -2541,7 +2542,7 @@ function EvaluationBar({
     : isLoading
       ? "…"
       : evaluation?.mate !== null && evaluation?.mate !== undefined
-        ? `${evaluation.mate > 0 ? "+" : "−"}M${Math.abs(evaluation.mate)}`
+        ? `${score > 0 ? "+" : "−"}M${Math.abs(evaluation.mate)}`
         : `${score >= 0 ? "+" : ""}${score.toFixed(1)}`;
 
   return (

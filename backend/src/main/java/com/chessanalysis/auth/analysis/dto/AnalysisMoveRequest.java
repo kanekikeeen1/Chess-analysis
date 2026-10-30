@@ -8,11 +8,13 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import com.chessanalysis.auth.analysis.validation.ValidFen;
+
 public record AnalysisMoveRequest(
         @NotBlank @Size(max = 32) String san,
-        @NotBlank @Size(min = 4, max = 5) String uci,
-        @NotBlank @Size(max = 180) String beforeFen,
-        @NotBlank @Size(max = 180) String afterFen,
+        @NotBlank @Pattern(regexp = UciMove.PATTERN, message = UciMove.MESSAGE) String uci,
+        @NotBlank @Size(max = 180) @ValidFen String beforeFen,
+        @NotBlank @Size(max = 180) @ValidFen String afterFen,
         boolean theory,
         @Size(max = 250) String theoryName,
         boolean capture,

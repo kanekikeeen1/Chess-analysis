@@ -15,6 +15,7 @@ import java.util.regex.Pattern;
 
 import com.chessanalysis.auth.analysis.dto.EngineVariationResponse;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
+import com.chessanalysis.auth.analysis.service.FenRules;
 
 public final class StockfishEngine implements AutoCloseable {
     private static final Pattern DEPTH = Pattern.compile("\\bdepth (\\d+)");
@@ -50,6 +51,9 @@ public final class StockfishEngine implements AutoCloseable {
     }
 
     public PositionEvaluationResponse analyze(String fen, int depth, int positionIndex) {
+        // Lớp chặn cuối: dù DTO đã kiểm tra, mọi đường gọi tới engine đều phải
+        // đi qua đây, nên không có FEN nào lọt vào stdin mà chưa được xác thực.
+        FenRules.requireValid(fen);
         send("position fen " + fen);
         send("go depth " + depth);
 
@@ -87,7 +91,7 @@ public final class StockfishEngine implements AutoCloseable {
         throw new IllegalStateException("Stockfish quá thời gian ở vị trí " + (positionIndex + 1) + ".");
     }
 
-    private ParsedInfo parseInfo(String line, String fen) {
+    static ParsedInfo parseInfo(String line, String fen) {
         Matcher score = SCORE.matcher(line);
         if (!score.find()) return null;
 
@@ -100,7 +104,16 @@ public final class StockfishEngine implements AutoCloseable {
         boolean whiteToMove = fen.split("\\s+")[1].equals("w");
         int whiteScore = whiteToMove ? raw : -raw;
         Integer mate = score.group(1).equals("mate") ? whiteScore : null;
-        double pawns = mate == null ? whiteScore / 100.0 : (whiteScore >= 0 ? 100.0 : -100.0);
+        double pawns;
+        if (mate == null) {
+            pawns = whiteScore / 100.0;
+        } else if (mate == 0) {
+            // `mate 0` nghĩa là bên đến lượt đi đã bị chiếu hết; không suy được
+            // dấu từ số 0 nên phải lấy theo lượt đi.
+            pawns = whiteToMove ? -100.0 : 100.0;
+        } else {
+            pawns = mate > 0 ? 100.0 : -100.0;
+        }
         List<String> moves = pvMatcher.find()
                 ? List.of(pvMatcher.group(1).trim().split("\\s+"))
                 : List.of();
@@ -170,6 +183,10 @@ public final class StockfishEngine implements AutoCloseable {
     }
 
     private void send(String command) {
+        // Mỗi lệnh UCI là đúng một dòng; ký tự xuống dòng bên trong sẽ thành lệnh thứ hai.
+        if (command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException("Lệnh UCI không được chứa ký tự xuống dòng.");
+        }
         try {
             input.write(command);
             input.newLine();
@@ -194,5 +211,5 @@ public final class StockfishEngine implements AutoCloseable {
         }
     }
 
-    private record ParsedInfo(int multiPv, EngineVariationResponse variation) {}
+    record ParsedInfo(int multiPv, EngineVariationResponse variation) {}
 }
