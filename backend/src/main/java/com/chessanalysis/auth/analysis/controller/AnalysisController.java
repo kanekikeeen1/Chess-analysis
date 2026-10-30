@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.chessanalysis.auth.analysis.dto.AnalysisJobResponse;
@@ -51,8 +52,10 @@ public class AnalysisController {
     }
 
     @GetMapping("/jobs/{publicId}")
-    public AnalysisJobResponse get(@PathVariable String publicId) {
-        return jobs.get(publicId);
+    public AnalysisJobResponse get(
+            @PathVariable String publicId,
+            @RequestParam(name = "from", defaultValue = "0") int fromEvaluation) {
+        return jobs.get(publicId, fromEvaluation);
     }
 
     @PostMapping("/evaluate-move")

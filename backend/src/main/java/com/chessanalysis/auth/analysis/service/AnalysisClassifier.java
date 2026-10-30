@@ -12,6 +12,24 @@ import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
 
 @Component
 public class AnalysisClassifier {
+    /*
+     * Ngưỡng nhãn theo phần trăm cơ hội thắng mà bên vừa đi đánh mất (thang 0–100).
+     * Ba mốc inaccuracy/mistake/blunder trùng với Lichess (0,1/0,2/0,3 trên thang
+     * winning chances [-1, 1], tức 5/10/15 điểm win%). Trước đây mỗi mốc còn được
+     * OR thêm một ngưỡng centipawn, nên trong thế cân bằng mất 1,4 tốt (≈13% win)
+     * chỉ bị gọi là "inaccuracy"; giờ chỉ còn một thước đo.
+     */
+    static final double EXCELLENT_MAX_LOSS = 2;
+    static final double OKAY_MAX_LOSS = 5;
+    static final double INACCURACY_MAX_LOSS = 10;
+    static final double MISTAKE_MAX_LOSS = 15;
+    /**
+     * Một nước trong sách ECO chỉ được gọi là "Theory" khi engine cũng không xem
+     * nó là sai sót. Sách ECO chứa cả những dòng yếu (Grob, Barnes…), và trước
+     * đây mọi nước trong sách đều nhận accuracy 100 bất kể đánh giá.
+     */
+    static final double THEORY_MAX_LOSS = OKAY_MAX_LOSS;
+
     public List<MoveReviewResponse> classify(
             List<AnalysisMoveRequest> moves,
             List<PositionEvaluationResponse> evaluations) {
@@ -24,8 +42,9 @@ public class AnalysisClassifier {
             double rawLoss = Math.max(0, whiteMoved
                     ? before.pawns() - after.pawns()
                     : after.pawns() - before.pawns());
-            double accuracy = move.theory() ? 100.0 : accuracy(before.pawns(), after.pawns(), whiteMoved);
+            double accuracy = accuracy(before.pawns(), after.pawns(), whiteMoved);
             double chanceLoss = chanceLoss(before.pawns(), after.pawns(), whiteMoved);
+            boolean confirmedTheory = move.theory() && chanceLoss < THEORY_MAX_LOSS;
             String bestMove = before.variations().isEmpty() || before.variations().get(0).moves().isEmpty()
                     ? null : normalize(before.variations().get(0).moves().get(0));
             boolean isBest = bestMove != null && bestMove.equals(normalize(move.uci()));
@@ -35,7 +54,7 @@ public class AnalysisClassifier {
                 assessment = new Assessment("best", "Nước chiếu hết ván đấu");
             } else if (move.legalMoveCount() == 1) {
                 assessment = new Assessment("forced", "Nước hợp lệ duy nhất trong vị trí này");
-            } else if (move.theory()) {
+            } else if (confirmedTheory) {
                 assessment = new Assessment("theory", move.theoryName() == null
                         ? "Nước lý thuyết khai cuộc"
                         : "Khai cuộc: " + move.theoryName());
@@ -51,13 +70,16 @@ public class AnalysisClassifier {
     }
 
     public String simpleAssessment(double before, double after, boolean whiteMoved, boolean isBest) {
-        double loss = Math.max(0, whiteMoved ? before - after : after - before);
-        double chance = chanceLoss(before, after, whiteMoved);
         if (isBest) return "best";
-        if (chance < 2 || loss <= 0.25) return "excellent";
-        if (chance < 5 || loss <= 0.7) return "okay";
-        if (chance < 10 || loss <= 1.5) return "inaccuracy";
-        if (chance < 20 || loss <= 3) return "mistake";
+        return lossKey(chanceLoss(before, after, whiteMoved));
+    }
+
+    /** Nhãn chỉ theo mức mất win%, dùng chung cho Game Review và bài tập. */
+    static String lossKey(double chanceLoss) {
+        if (chanceLoss < EXCELLENT_MAX_LOSS) return "excellent";
+        if (chanceLoss < OKAY_MAX_LOSS) return "okay";
+        if (chanceLoss < INACCURACY_MAX_LOSS) return "inaccuracy";
+        if (chanceLoss < MISTAKE_MAX_LOSS) return "mistake";
         return "blunder";
     }
 
@@ -110,11 +132,17 @@ public class AnalysisClassifier {
             return new Assessment("critical", "Nước gần như duy nhất giữ lợi thế và không dễ nhận ra");
         }
         if (isBest) return new Assessment("best", "Nước đi tốt nhất trong vị trí");
-        if (chanceLoss < 2 || rawLoss <= 0.25) return new Assessment("excellent", "Rất sát với nước tốt nhất");
-        if (chanceLoss < 5 || rawLoss <= 0.7) return new Assessment("okay", "Nước đi chấp nhận được");
-        if (chanceLoss < 10 || rawLoss <= 1.5) return new Assessment("inaccuracy", "Bỏ lỡ một lựa chọn chính xác hơn");
-        if (chanceLoss < 20 || rawLoss <= 3) return new Assessment("mistake", "Làm tình hình xấu đi rõ rệt");
-        return new Assessment("blunder", "Làm thay đổi lớn cục diện ván đấu");
+        String key = lossKey(chanceLoss);
+        String detail = switch (key) {
+            case "excellent" -> "Rất sát với nước tốt nhất";
+            case "okay" -> "Nước đi chấp nhận được";
+            case "inaccuracy" -> move.theory()
+                    ? "Nằm trong sách khai cuộc nhưng engine thấy có lựa chọn tốt hơn"
+                    : "Bỏ lỡ một lựa chọn chính xác hơn";
+            case "mistake" -> "Làm tình hình xấu đi rõ rệt";
+            default -> "Làm thay đổi lớn cục diện ván đấu";
+        };
+        return new Assessment(key, detail);
     }
 
     public double accuracy(double before, double after, boolean whiteMoved) {

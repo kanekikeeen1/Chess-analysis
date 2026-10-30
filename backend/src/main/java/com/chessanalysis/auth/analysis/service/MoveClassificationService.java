@@ -38,20 +38,9 @@ public class MoveClassificationService {
             evaluations.add(evaluation.toResponse(index));
         }
         List<MoveReviewResponse> reviewed = classifier.classify(request.moves(), evaluations);
-        return new ClassifyMovesResponse(
-                reviewed,
-                averageAccuracy(reviewed, true),
-                averageAccuracy(reviewed, false),
-                "rules");
-    }
-
-    private Double averageAccuracy(List<MoveReviewResponse> moves, boolean white) {
-        return moves.stream()
-                .filter(move -> ((move.index() - 1) % 2 == 0) == white)
-                .map(MoveReviewResponse::accuracy)
-                .filter(value -> value != null)
-                .mapToDouble(Double::doubleValue)
-                .average()
-                .stream().boxed().findFirst().orElse(null);
+        EvaluationMath.GameAccuracy accuracy = EvaluationMath.gameAccuracy(
+                evaluations.stream().map(PositionEvaluationResponse::pawns).toList(),
+                FenNormalizer.whiteToMove(request.moves().get(0).beforeFen()));
+        return new ClassifyMovesResponse(reviewed, accuracy.white(), accuracy.black(), "rules");
     }
 }

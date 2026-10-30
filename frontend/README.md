@@ -2,7 +2,7 @@
 
 Đồ án phân tích cờ vua gồm hai phần trong cùng một repository:
 
-- `app/`, `components/`, `lib/`: frontend React/Vinext.
+- `app/`, `components/`, `lib/`: frontend Next.js 16 (App Router) + React 19.
 - `../backend/`: backend Spring Boot + MySQL + Stockfish native cho tài khoản, Game Review, kho ván và bài tập.
 
 Google và Clerk đã được loại bỏ. Người dùng đăng ký bằng tên đăng nhập và mật khẩu riêng của Chess Analysis.

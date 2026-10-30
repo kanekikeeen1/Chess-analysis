@@ -11,12 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
-    "db/**",
-    "dist/**",
-    "examples/**",
     "next-env.d.ts",
     "public/stockfish/**",
-    "worker/**",
   ]),
   {
     rules: {
@@ -26,13 +22,13 @@ const eslintConfig = defineConfig([
       "react-hooks/immutability": "off",
       "react-hooks/preserve-manual-memoization": "off",
       "react-hooks/set-state-in-effect": "off",
-      // Internal routes use plain anchors so the vinext build behaves the same
-      // in local Windows development and in production output.
+      // Internal routes still use plain anchors (full page loads). Kept from the
+      // vinext era; switching them to next/link is optional.
       "@next/next/no-html-link-for-pages": "off",
     },
   },
   {
-    files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
+    files: ["components/ui/**/*.{ts,tsx}"],
     rules: {
       // These files are vendored verbatim from shadcn@4.17.0. Keep the
       // registry source intact while applying the stricter rules to Site code.

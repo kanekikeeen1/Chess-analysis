@@ -14,6 +14,8 @@ public record AnalysisJobResponse(
         Integer currentPosition,
         String errorMessage,
         AnalysisResultResponse result,
+        /** Chỉ số vị trí đầu tiên trong {@code result.evaluations}; các vị trí trước đó client đã có. */
+        int evaluationsFrom,
         Instant createdAt,
         Instant updatedAt,
         Instant completedAt) {}

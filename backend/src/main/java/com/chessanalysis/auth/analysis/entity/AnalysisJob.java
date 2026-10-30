@@ -92,6 +92,17 @@ public class AnalysisJob {
         errorMessage = null;
     }
 
+    /** Đưa job về hàng đợi từ đầu; dùng khi máy chủ khởi động lại giữa chừng. */
+    public void requeue(Instant now) {
+        status = "QUEUED";
+        progressPercent = 0;
+        completedPositions = 0;
+        currentPosition = null;
+        resultJson = null;
+        errorMessage = null;
+        updatedAt = now;
+    }
+
     public void updateProgress(int completed, int current, String partialResult, Instant now) {
         completedPositions = completed;
         currentPosition = current;

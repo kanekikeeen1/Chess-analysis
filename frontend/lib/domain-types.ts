@@ -95,6 +95,8 @@ export type BackendAnalysisJob = {
   currentPosition: number | null;
   errorMessage: string | null;
   result: BackendAnalysisResult | null;
+  /** Index of the first entry in `result.evaluations`; earlier ones were sent in previous polls. */
+  evaluationsFrom: number;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
