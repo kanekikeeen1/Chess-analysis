@@ -14,6 +14,8 @@ import {
   ChevronLast,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Cpu,
   GitBranch,
   History,
   LogIn,
@@ -21,6 +23,7 @@ import {
   ScanSearch,
   Save,
   Upload,
+  Users,
 } from "lucide-react";
 import {
   Select,
@@ -73,7 +76,19 @@ import {
   EngineLines,
 } from "@/components/analysis/review-panels";
 import { MoveHistory } from "@/components/analysis/move-history";
+import { HumanMovesPanel } from "@/components/analysis/human-moves-panel";
+import { GameEloCard } from "@/components/analysis/game-elo-card";
+import { IMPORT_PGN_KEY } from "@/lib/human-moves";
 import { EvaluationBar, NavButton } from "@/components/analysis/board-controls";
+
+type SideTab = "engine" | "human" | "report" | "load";
+
+const SIDE_TABS: Array<{ id: SideTab; label: string; icon: typeof Cpu }> = [
+  { id: "engine", label: "Engine", icon: Cpu },
+  { id: "human", label: "Theo Elo", icon: Users },
+  { id: "report", label: "Báo cáo", icon: ClipboardList },
+  { id: "load", label: "Nạp ván", icon: Upload },
+];
 
 export default function AnalysisPage() {
   const { isLoading: authLoading, user } = useAuth();
@@ -101,6 +116,9 @@ export default function AnalysisPage() {
   const [isSavingAnalysis, setIsSavingAnalysis] = useState(false);
   const [savedGameId, setSavedGameId] = useState<number | null>(null);
   const [saveFeedback, setSaveFeedback] = useState("");
+  // Bên người dùng cầm trong ván: backend ước lượng Elo của bên đó và cộng vào hồ sơ người chơi.
+  const [userSide, setUserSide] = useState<"w" | "b" | "">("");
+  const [sideTab, setSideTab] = useState<SideTab>("engine");
   const [boardThemeId, setBoardThemeId] = useState<BoardThemeId>("forest");
   const [pieceThemeId, setPieceThemeId] = useState<PieceThemeId>("staunton");
   const [uiTheme, setUiTheme] = useState<UiTheme>("dark");
@@ -109,6 +127,11 @@ export default function AnalysisPage() {
   const moveSoundRef = useRef<HTMLAudioElement | null>(null);
   const captureSoundRef = useRef<HTMLAudioElement | null>(null);
   const loadedArchiveIdRef = useRef<string | null>(null);
+
+  // Vừa nạp ván (PGN, FEN hay từ kho) thì mở thẳng tab báo cáo để thấy tiến độ review.
+  useEffect(() => {
+    if (reviewMode) setSideTab("report");
+  }, [reviewMode, reviewSessionId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -152,6 +175,7 @@ export default function AnalysisPage() {
         setPlayerNames({ black: loadedGame.blackPlayer, white: loadedGame.whitePlayer });
         setGameResult(loadedGame.result);
         setSavedGameId(loadedGame.id);
+        setUserSide(loadedGame.userSide ?? "");
         setSaveFeedback("Đây là báo cáo đã lưu. Bạn có thể thử biến mà không làm thay đổi ván gốc.");
         setMessage(`Đã mở ${loadedGame.title} từ kho ván cờ`);
       })
@@ -161,6 +185,21 @@ export default function AnalysisPage() {
       })
       .finally(() => setArchiveLoading(false));
   }, [authLoading, user]);
+
+  useEffect(() => {
+    // Ván chuyển sang từ trang đấu bot: điền sẵn PGN, người dùng chọn độ sâu rồi bấm Phân tích.
+    let imported: string | null = null;
+    try {
+      imported = window.sessionStorage.getItem(IMPORT_PGN_KEY);
+      window.sessionStorage.removeItem(IMPORT_PGN_KEY);
+    } catch {
+      return;
+    }
+    if (!imported) return;
+    setInputType("pgn");
+    setGameText(imported);
+    setMessage("Đã chuyển ván đấu với bot sang. Bấm Phân tích để chạy Game Review.");
+  }, []);
 
   useEffect(() => {
     const savedBoard = window.localStorage.getItem("chess-analysis-board-theme");
@@ -459,6 +498,22 @@ export default function AnalysisPage() {
     () => [...openingMatches].reverse().find((entry): entry is OpeningEntry => Boolean(entry)) ?? null,
     [openingMatches],
   );
+  const reviewedMoves = useMemo(
+    () => (reviewTimeline?.uciMoves ?? [])
+      .map((uci, index) => ({ fen: reviewTimeline?.positions[index] ?? "", uci }))
+      .filter((move) => move.fen && move.uci),
+    [reviewTimeline],
+  );
+
+  useEffect(() => {
+    if (archivedReview || !user) return;
+    // Tên trong PGN trùng tên đăng nhập thì gần như chắc là ván của người dùng; không trùng thì để họ chọn.
+    const name = user.username.trim().toLowerCase();
+    if (playerNames.white.trim().toLowerCase() === name) setUserSide("w");
+    else if (playerNames.black.trim().toLowerCase() === name) setUserSide("b");
+    else setUserSide("");
+  }, [archivedReview, playerNames, user]);
+
   const currentMoveAssessment = currentIndex > 0
     ? moveAssessments[currentIndex - 1] ?? null
     : null;
@@ -642,6 +697,7 @@ export default function AnalysisPage() {
     setGameResult("*");
     setSavedGameId(null);
     setSaveFeedback("");
+    setUserSide("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -896,6 +952,7 @@ export default function AnalysisPage() {
           // Backend đọc lại tác vụ này để ghi bảng analyzed_moves; không có nó
           // thì ván vẫn lưu được, chỉ là không vào tập dữ liệu phân tích.
           analysisJobId: backendReviewJob?.publicId ?? null,
+          userSide: userSide || null,
         }),
       });
       setSavedGameId(result.id);
@@ -906,6 +963,11 @@ export default function AnalysisPage() {
     } finally {
       setIsSavingAnalysis(false);
     }
+  }
+
+  function playHumanMove(uci: string) {
+    if (uci.length < 4) return;
+    attemptMove(uci.slice(0, 2) as Square, uci.slice(2, 4) as Square);
   }
 
   async function handleFile(file?: File) {
@@ -1028,6 +1090,9 @@ export default function AnalysisPage() {
                 reviewMode={reviewMode}
                 reviewTotal={reviewTotal}
               />
+              {reviewComplete && reviewedMoves.length > 0 && (
+                <GameEloCard moves={reviewedMoves} playerNames={playerNames} />
+              )}
               {reviewComplete && (
                 <section className="border-b border-white/10 bg-[#202623] px-3 py-3">
                   <div className="rounded-xl border border-white/8 bg-[#2b312e] p-3">
@@ -1038,6 +1103,25 @@ export default function AnalysisPage() {
                         <p className="mt-1 text-xs leading-5 text-[#96a098]">Backend lưu PGN/FEN, khai cuộc, độ chính xác và nhãn từng nước theo tài khoản.</p>
                       </div>
                     </div>
+                    {!savedGameId && reviewedMoves.length > 0 && (
+                      <div className="mt-3" role="radiogroup" aria-label="Bạn cầm quân nào trong ván này">
+                        <p className="mb-1.5 text-[11px] text-[#96a098]">Bạn cầm quân nào? Dùng để ước lượng Elo của bạn qua các ván.</p>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {([["w", `♔ ${playerNames.white}`], ["b", `♚ ${playerNames.black}`], ["", "Không phải tôi"]] as const).map(([side, label]) => (
+                            <button
+                              key={side || "none"}
+                              type="button"
+                              role="radio"
+                              aria-checked={userSide === side}
+                              onClick={() => setUserSide(side)}
+                              className={`truncate rounded-md px-2 py-1.5 text-[11px] font-semibold transition ${userSide === side ? "bg-[#4b7fe8] text-white" : "bg-white/6 text-[#c5cec7] hover:bg-white/12"}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {savedGameId ? (
                       <a href={`/archive/${savedGameId}`} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#72cf86] px-3 py-2.5 text-sm font-bold text-[#112016]">Mở ván vừa lưu <ChevronRight className="size-4" /></a>
                     ) : (
@@ -1057,6 +1141,12 @@ export default function AnalysisPage() {
             fen={currentFen}
             evaluation={currentEvaluation}
             targetDepth={reviewMode ? undefined : INTERACTIVE_DEPTH}
+          />
+
+          <HumanMovesPanel
+            fen={currentFen}
+            gameOver={currentGame.isGameOver()}
+            onPlayMove={playHumanMove}
           />
 
           <OpeningCard

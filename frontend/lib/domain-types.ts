@@ -12,6 +12,11 @@ export type GameSummary = {
   depth: number | null;
   moveCount: number;
   createdAt: string;
+  /** Bên người dùng cầm; null khi không phải ván của họ. */
+  userSide: "w" | "b" | null;
+  /** Elo ước lượng bằng M2 cho bên người dùng cầm. */
+  estimatedElo: number | null;
+  eloStdError: number | null;
 };
 
 export type GameDetail = GameSummary & {

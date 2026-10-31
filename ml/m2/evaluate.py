@@ -21,6 +21,7 @@ import argparse
 import collections
 import json
 import logging
+import os
 from pathlib import Path
 
 import chess
@@ -153,6 +154,11 @@ def elo_interpolation_matrix(
     device = predictor.device
 
     hits = np.zeros((NUM_ELO_BUCKETS, NUM_ELO_BUCKETS))
+    # Log-likelihood của nước thật, cộng dồn theo (dải thật, dải hỏi). Top-1 chỉ đổi khi
+    # nước xếp đầu đổi chỗ, nên chênh lệch giữa các cột (~0,2 điểm) chìm trong nhiễu
+    # thống kê với vài nghìn vị trí mỗi hàng. NLL đo trên đúng cùng các vị trí cho mọi
+    # cột, nhạy hơn nhiều và là thước đo chuẩn của bài toán mô phỏng người chơi.
+    nll = np.zeros((NUM_ELO_BUCKETS, NUM_ELO_BUCKETS))
     totals = np.zeros(NUM_ELO_BUCKETS)
 
     for batch in loader:
@@ -170,17 +176,25 @@ def elo_interpolation_matrix(
                 batch["elo_norm"].to(device), (bucket_center(i) - 1500.0) / 400.0
             )
             logits, _ = predictor.model(planes, asked_bucket, asked_norm)
-            top1 = logits.masked_fill(~mask, float("-inf")).argmax(dim=-1)
+            masked = logits.float().masked_fill(~mask, float("-inf"))
+            top1 = masked.argmax(dim=-1)
             correct = (top1 == target).cpu().numpy()
+            losses = F.cross_entropy(masked, target, reduction="none").cpu().numpy()
             for j in range(NUM_ELO_BUCKETS):
                 hits[j, i] += correct[true_np == j].sum()
+                nll[j, i] += losses[true_np == j].sum()
 
     matrix = hits / np.maximum(totals[:, None], 1)
+    nll_matrix = nll / np.maximum(totals[:, None], 1)
     return {
         "labels": [bucket_label(b) for b in range(NUM_ELO_BUCKETS)],
         "matrix": matrix.tolist(),
         "rowCounts": totals.tolist(),
         "diagonalWins": int(sum(matrix[j].argmax() == j for j in range(NUM_ELO_BUCKETS))),
+        "nllMatrix": nll_matrix.tolist(),
+        "nllDiagonalWins": int(sum(nll_matrix[j].argmin() == j for j in range(NUM_ELO_BUCKETS))),
+        # Khoảng cách trung bình (theo số dải) từ cột tốt nhất tới đường chéo; 0 là hoàn hảo.
+        "nllMeanOffset": float(np.mean([abs(int(nll_matrix[j].argmin()) - j) for j in range(NUM_ELO_BUCKETS)])),
     }
 
 
@@ -243,6 +257,61 @@ def elo_estimation_error(
     return {"perMoveCount": results, "players": len(usable)}
 
 
+def stockfish_baseline(
+    engine_path: str,
+    data_dir: Path,
+    split: str,
+    per_bucket: int = 300,
+    depth: int = 12,
+) -> dict:
+    """Baseline Stockfish: nước tốt nhất của engine khớp nước người thật bao nhiêu.
+
+    Đây là mốc so sánh chuẩn trong bài Maia: engine mạnh không mô phỏng được người,
+    và khoảng cách giữa M2 với dòng này cho thấy giá trị của việc học từ ván người.
+    Lấy mẫu đều ``per_bucket`` vị trí mỗi dải vì engine chậm hơn mạng hàng nghìn lần.
+    """
+    import chess.engine
+    import pyarrow.parquet as pq
+
+    samples: dict[int, list[tuple[str, str]]] = collections.defaultdict(list)
+    for shard in list_shards(data_dir, split):
+        table = pq.read_table(shard, columns=["fen", "move_uci", "elo"])
+        for fen, uci, elo in zip(table.column("fen").to_pylist(),
+                                 table.column("move_uci").to_pylist(),
+                                 table.column("elo").to_pylist()):
+            bucket = elo_to_bucket(elo)
+            if len(samples[bucket]) < per_bucket:
+                samples[bucket].append((fen, uci))
+        if all(len(samples[b]) >= per_bucket for b in range(NUM_ELO_BUCKETS)):
+            break
+
+    rows = []
+    hits1_total = hits3_total = n_total = 0
+    with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+        engine.configure({"Threads": 1, "Hash": 64})
+        for b in range(NUM_ELO_BUCKETS):
+            hits1 = hits3 = 0
+            for fen, uci in samples[b]:
+                infos = engine.analyse(chess.Board(fen), chess.engine.Limit(depth=depth), multipv=3)
+                moves = [info["pv"][0].uci() for info in infos if info.get("pv")]
+                hits1 += int(bool(moves) and moves[0] == uci)
+                hits3 += int(uci in moves)
+            n = len(samples[b])
+            if n:
+                rows.append({"bucket": b, "label": bucket_label(b), "n": n,
+                             "top1": hits1 / n, "top3": hits3 / n})
+                LOGGER.info("Stockfish depth %d · %s: top-1 %.2f%%", depth, bucket_label(b), 100 * hits1 / n)
+            hits1_total += hits1
+            hits3_total += hits3
+            n_total += n
+
+    return {
+        "depth": depth,
+        "perBucket": rows,
+        "overall": {"n": n_total, "top1": hits1_total / max(n_total, 1), "top3": hits3_total / max(n_total, 1)},
+    }
+
+
 def render_report(report: dict) -> str:
     """In kết quả ở dạng bảng có thể dán thẳng vào báo cáo."""
     lines: list[str] = []
@@ -279,6 +348,16 @@ def render_report(report: dict) -> str:
             f"\n  Đường chéo thắng ở {matrix['diagonalWins']}/"
             f"{len(matrix['labels'])} hàng."
         )
+        if matrix.get("nllMatrix"):
+            lines.append("\n=== 2b. Ma trận nội suy theo NLL (thấp hơn = khớp hơn) ===")
+            lines.append(f"{'':>12}{header}")
+            for j, label in enumerate(matrix["labels"]):
+                cells = "".join(f"{value:>10.4f} " for value in matrix["nllMatrix"][j])
+                lines.append(f"{label:>12}{cells}")
+            lines.append(
+                f"\n  NLL thấp nhất nằm trên đường chéo ở {matrix['nllDiagonalWins']}/{len(matrix['labels'])} hàng;"
+                f" lệch trung bình {matrix['nllMeanOffset']:.2f} dải."
+            )
 
     if report.get("eloEstimation", {}).get("perMoveCount"):
         lines.append("\n=== 3. Sai số ước lượng Elo ===")
@@ -288,6 +367,15 @@ def render_report(report: dict) -> str:
                 f"{row['moves']:>10} {row['mae']:>9.1f} "
                 f"{row['median']:>10.1f} {row['p90']:>9.1f}"
             )
+
+    if report.get("stockfish"):
+        sf = report["stockfish"]
+        lines.append(f"\n=== 4. Baseline Stockfish (depth {sf['depth']}) ===")
+        lines.append(f"{'Dải':>12} {'n':>6} {'top-1':>8} {'top-3':>8}")
+        for row in sf["perBucket"]:
+            lines.append(f"{row['label']:>12} {row['n']:>6} {row['top1']:>7.2%} {row['top3']:>7.2%}")
+        o = sf["overall"]
+        lines.append(f"{'TỔNG':>12} {o['n']:>6} {o['top1']:>7.2%} {o['top3']:>7.2%}")
 
     return "\n".join(lines)
 
@@ -303,6 +391,14 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--skip-interpolation", action="store_true")
     parser.add_argument("--skip-elo-estimation", action="store_true")
+    parser.add_argument("--interpolation-rows", type=int, default=150_000,
+                        help="Số vị trí cho ma trận nội suy (mỗi vị trí chạy mạng 10 lần)")
+    parser.add_argument("--estimation-players", type=int, default=300,
+                        help="Số ván dùng để đo sai số ước lượng Elo")
+    parser.add_argument("--stockfish", type=str, default=os.environ.get("STOCKFISH_PATH"),
+                        help="Đường dẫn Stockfish cho baseline (mặc định lấy STOCKFISH_PATH)")
+    parser.add_argument("--stockfish-per-bucket", type=int, default=300)
+    parser.add_argument("--stockfish-depth", type=int, default=12)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO,
@@ -323,12 +419,18 @@ def main() -> None:
     if not args.skip_interpolation:
         report["interpolation"] = elo_interpolation_matrix(
             predictor, args.data_dir, args.split,
-            min(args.max_rows, 50_000), args.batch_size,
+            min(args.max_rows, args.interpolation_rows), args.batch_size,
         )
     if not args.skip_elo_estimation:
         report["eloEstimation"] = elo_estimation_error(
-            predictor, args.data_dir, args.split
+            predictor, args.data_dir, args.split, players=args.estimation_players
         )
+    if args.stockfish and args.stockfish_per_bucket > 0:
+        report["stockfish"] = stockfish_baseline(
+            args.stockfish, args.data_dir, args.split, args.stockfish_per_bucket, args.stockfish_depth
+        )
+    else:
+        LOGGER.warning("Bỏ qua baseline Stockfish: chưa đặt STOCKFISH_PATH hoặc --stockfish.")
 
     print(render_report(report))
 

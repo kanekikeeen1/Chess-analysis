@@ -22,6 +22,7 @@ public final class StockfishEngine implements AutoCloseable {
     private static final Pattern MULTI_PV = Pattern.compile("\\bmultipv (\\d+)");
     private static final Pattern SCORE = Pattern.compile("\\bscore (cp|mate) (-?\\d+)");
     private static final Pattern PV = Pattern.compile("\\bpv (.+)$");
+    private static final Pattern UCI_MOVE = Pattern.compile("[a-h][1-8][a-h][1-8][qrbn]?");
 
     private final Process process;
     private final BufferedReader output;
@@ -54,8 +55,40 @@ public final class StockfishEngine implements AutoCloseable {
         // Lớp chặn cuối: dù DTO đã kiểm tra, mọi đường gọi tới engine đều phải
         // đi qua đây, nên không có FEN nào lọt vào stdin mà chưa được xác thực.
         FenRules.requireValid(fen);
+        List<EngineVariationResponse> ordered = search(fen, "go depth " + depth, positionIndex);
+        if (ordered.isEmpty()) {
+            throw new IllegalStateException("Stockfish không trả về đánh giá cho vị trí " + positionIndex + ".");
+        }
+        EngineVariationResponse primary = ordered.get(0);
+        return new PositionEvaluationResponse(
+                positionIndex, fen, primary.depth(), primary.mate(), primary.moves(),
+                primary.pawns(), ordered);
+    }
+
+    /**
+     * Đánh giá đúng các nước cho trước (UCI {@code searchmoves}), mỗi nước một biến. Kết quả xếp theo
+     * điểm của engine, không theo thứ tự truyền vào; tra theo nước đầu tiên của từng biến.
+     */
+    public List<EngineVariationResponse> analyzeMoves(String fen, int depth, List<String> moves) {
+        FenRules.requireValid(fen);
+        if (moves.isEmpty()) return List.of();
+        for (String move : moves) {
+            // Nước đi lọt vào cùng dòng lệnh với "go", nên phải đúng dạng UCI, không hơn.
+            if (!UCI_MOVE.matcher(move).matches()) {
+                throw new IllegalArgumentException("Nước đi không đúng dạng UCI: " + move);
+            }
+        }
+        send("setoption name MultiPV value " + moves.size());
+        try {
+            return search(fen, "go depth " + depth + " searchmoves " + String.join(" ", moves), 0);
+        } finally {
+            send("setoption name MultiPV value 2");
+        }
+    }
+
+    private List<EngineVariationResponse> search(String fen, String goCommand, int positionIndex) {
         send("position fen " + fen);
-        send("go depth " + depth);
+        send(goCommand);
 
         Map<Integer, EngineVariationResponse> variations = new HashMap<>();
         long deadline = System.nanoTime() + timeout.toNanos();
@@ -73,17 +106,10 @@ public final class StockfishEngine implements AutoCloseable {
                 }
             }
             if (line.startsWith("bestmove")) {
-                List<EngineVariationResponse> ordered = variations.entrySet().stream()
+                return variations.entrySet().stream()
                         .sorted(Map.Entry.comparingByKey())
                         .map(Map.Entry::getValue)
                         .toList();
-                if (ordered.isEmpty()) {
-                    throw new IllegalStateException("Stockfish không trả về đánh giá cho vị trí " + positionIndex + ".");
-                }
-                EngineVariationResponse primary = ordered.get(0);
-                return new PositionEvaluationResponse(
-                        positionIndex, fen, primary.depth(), primary.mate(), primary.moves(),
-                        primary.pawns(), ordered);
             }
         }
 

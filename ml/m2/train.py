@@ -80,6 +80,8 @@ class TrainConfig:
     amp: bool = True
     seed: int = 1337
     max_steps: int | None = None
+    # Dừng khi loss validation không giảm sau chừng này lần đánh giá liên tiếp.
+    early_stop_patience: int | None = None
 
     model: ModelConfig = dataclasses.field(default_factory=ModelConfig)
 
@@ -256,6 +258,8 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
     history_path = run_dir / "history.jsonl"
     train_log_path = run_dir / "train_log.jsonl"
     best_top1 = 0.0
+    best_val_loss = float("inf")
+    evals_without_improvement = 0
     started = time.time()
     running_loss = 0.0
     running_n = 0
@@ -325,6 +329,18 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
                     save_checkpoint(run_dir / "best.pt", model, optimizer,
                                     scaler, step, epoch, cfg, metrics)
                     LOGGER.info("→ checkpoint tốt nhất mới (top1 %.4f)", best_top1)
+
+                if metrics["loss"] < best_val_loss:
+                    best_val_loss = metrics["loss"]
+                    evals_without_improvement = 0
+                else:
+                    evals_without_improvement += 1
+                if cfg.early_stop_patience and evals_without_improvement >= cfg.early_stop_patience:
+                    LOGGER.info("Loss validation không giảm sau %d lần đánh giá (thấp nhất %.4f), dừng sớm.",
+                                evals_without_improvement, best_val_loss)
+                    save_checkpoint(run_dir / "last.pt", model, optimizer,
+                                    scaler, step, epoch, cfg, {"top1": best_top1})
+                    return run_dir / "best.pt"
 
             if step % cfg.save_every == 0:
                 save_checkpoint(run_dir / "last.pt", model, optimizer,

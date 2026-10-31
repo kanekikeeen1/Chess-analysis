@@ -73,20 +73,30 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   *Code xong: đọc thẳng URL Lichess (ổ C chỉ còn ~33 GB, không tải nổi file tháng ~30 GB), bỏ qua nước đi của ván
   bị loại ngay từ tiêu đề, `--per-bucket` để cân bằng 10 dải, config `m2-rtx5060ti.yaml`. Ván OTB và cờ `source`
   để sau khi xem dải 2600+ có đủ dữ liệu không. Còn: cài Python, chạy test, sinh dữ liệu thật.*
-- [ ] **C3 Huấn luyện và đánh giá M2 nền**: smoke config → config GPU; báo cáo top-1/top-3 theo dải,
+- [x] **C3 Huấn luyện và đánh giá M2 nền** — v2 (`m2-rtx5060ti-v2`): NLL thắng đường chéo 6/10,
+  lệch TB 0,4 dải; M2 hơn Stockfish ở ≤1800, kém ở ≥2000. Báo cáo ở `docs/thesis/m2/m2-rtx5060ti-v2/`.
+  Còn mở: v3 nhiều dữ liệu hơn để mạnh lên ở dải cao (cần cho D3).: smoke config → config GPU; báo cáo top-1/top-3 theo dải,
   ma trận nội suy Elo, so với baseline Stockfish top-1 và số liệu công bố của Maia.
   *Run 1 (`m2-rtx5060ti`): top-1 41,4%, top-3 69,1%; báo cáo ở `docs/thesis/m2/m2-rtx5060ti/`.
   Còn: quá khớp (ít ván, ~58 vị trí/ván) và Elo chỉ góp +0,27 điểm → giới hạn vị trí mỗi ván, đọc nhiều ván hơn,
   huấn luyện lại; thêm baseline Stockfish top-1.*
   Xong khi: Elo góp rõ rệt (ma trận nội suy thắng đường chéo ở đa số dải).
-- [ ] **C4 Xuất ONNX và phục vụ trong backend**: ONNX Runtime Java; port `encoding.py` sang Java và test
-  khớp từng vector với Python; API `POST /api/human-moves {fen, elo}` → top-k nước và xác suất.
+- [x] **C4 Xuất ONNX và phục vụ trong backend**: ONNX Runtime Java; port `encoding.py` sang Java và test
+  khớp từng vector với Python; API `POST /api/human-moves {fen, elos[], topK}` → top-k nước và xác suất.
+  *Xong: `humanmove/` (M2Encoding, HumanMoveModel, controller), `GET /api/human-moves/levels`;
+  `M2EncodingTest` khớp Python trên 69 thế cờ, `HumanMoveModelReferenceTest` khớp ONNX Runtime Python tới 1e-4.
+  Đang phục vụ mô hình v2 (bước 9000); khi có v3 chỉ cần xuất lại `ml/models/m2.onnx` rồi khởi động lại backend.*
 - [ ] **C5 Đưa vào web**
   - Trang phân tích: chọn mức Elo → panel "Người Elo X thường đi", gồm top-3 nước + xác suất
     + đánh giá Stockfish của từng nước.
   - Báo cáo ván: ước lượng Elo của ván (`estimate_elo`) → lưu `user_playing_profiles`.
   - Training: **đấu với bot Elo X** (lấy mẫu từ policy theo xác suất, không luôn chọn top-1).
   Xong khi: chọn 1200 và 2200 trên cùng một thế cờ cho ra gợi ý khác nhau một cách hợp lý.
+  *Code xong: panel "Người chơi thường đi" (chọn tối đa 3 dải, điểm Stockfish depth 12 qua `searchmoves`,
+  bấm để đi thử); thẻ "Elo ước lượng của ván" (`POST /api/human-moves/estimate`); lưu ván kèm bên mình cầm →
+  V20 lưu đường log-likelihood từng ván, hồ sơ = hậu nghiệm của tổng (`GET /api/profile/playing`, hiện ở Kho
+  ván cờ); trang `/play` đấu bot (lấy mẫu trong top-10, có "Đi lại", chuyển ván sang trang phân tích).
+  Còn: chạy thử trên giao diện.*
 
 ## Giai đoạn D — Phong cách đại kiện tướng: Lê Quang Liêm, Magnus Carlsen, Daniil Dubov · ~8–12 ngày + GPU
 

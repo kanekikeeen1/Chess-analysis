@@ -65,10 +65,18 @@ public class StockfishEnginePool implements DisposableBean {
      * quay lại pool nếu còn khỏe, còn không thì bị hủy và lần mượn sau tạo mới.
      */
     public Lease borrow() {
+        return borrow(acquireTimeout);
+    }
+
+    /**
+     * Như {@link #borrow()} nhưng chờ tối đa {@code wait}. Dùng cho việc phụ, như chấm điểm gợi ý M2, để
+     * khi pool đang bận review thì bỏ qua sớm thay vì giữ request của người dùng cả phút.
+     */
+    public Lease borrow(Duration wait) {
         if (shuttingDown) throw new IllegalStateException("Máy chủ đang tắt, không nhận thêm phân tích.");
         boolean acquired;
         try {
-            acquired = permits.tryAcquire(acquireTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            acquired = permits.tryAcquire(wait.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Tác vụ Stockfish đã bị hủy khi chờ engine.", exception);

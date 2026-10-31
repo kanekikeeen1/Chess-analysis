@@ -19,12 +19,14 @@ thay vì phải tải và lưu cả file.
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import dataclasses
 import functools
 import hashlib
 import io
 import logging
+import random
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -76,6 +78,14 @@ class FilterConfig:
     require_both_elos: bool = True
     drop_forced_moves: bool = True  # chỉ có một nước hợp lệ thì không có gì để học
     drop_time_forfeit_last_move: bool = True
+    # Chỉ áp cho tập train: số vị trí tối đa lấy từ mỗi bên của một ván. Các vị trí
+    # trong cùng ván gần như trùng nhau, nên lấy ít vị trí từ nhiều ván cho mô hình
+    # nhiều thông tin hơn hẳn với cùng số mẫu. Val/test giữ nguyên cả ván để còn đo
+    # được ước lượng Elo từ chuỗi nước đi dài.
+    positions_per_side: int | None = None
+    # Số vị trí tối đa của một tài khoản. Dải 2600+ trên Lichess chỉ gồm ít tài khoản
+    # chơi rất nhiều ván; không chặn thì mô hình học thuộc vài người đó.
+    max_positions_per_player: int | None = None
 
 
 def _parse_time_control(value: str | None) -> tuple[int, int] | None:
@@ -235,6 +245,19 @@ def extract_samples(game: chess.pgn.Game, cfg: FilterConfig) -> list[dict]:
     return rows
 
 
+def sample_per_side(rows: list[dict], per_side: int, seed: str) -> list[dict]:
+    """Giữ tối đa ``per_side`` vị trí ngẫu nhiên cho mỗi bên, theo thứ tự nước đi.
+
+    Hạt giống là khóa ván, nên chạy lại cho đúng cùng một tập dữ liệu.
+    """
+    rng = random.Random(seed)
+    kept: list[dict] = []
+    for side in ("w", "b"):
+        own = [row for row in rows if row["fen"].split(" ", 2)[1] == side]
+        kept.extend(own if len(own) <= per_side else rng.sample(own, per_side))
+    return sorted(kept, key=lambda row: row["ply"])
+
+
 class ShardWriter:
     """Ghi Parquet theo từng phần, mỗi split một chuỗi shard."""
 
@@ -314,6 +337,8 @@ class BuildResult:
     games_seen: int
     games_kept: int
     stop_reason: str
+    players: int = 0
+    players_per_bucket: list[int] = dataclasses.field(default_factory=list)
 
 
 def build_dataset(
@@ -337,18 +362,21 @@ def build_dataset(
     """
     writer = ShardWriter(out_dir, rows_per_shard)
     per_bucket = [0] * NUM_ELO_BUCKETS
+    per_player: collections.Counter[str] = collections.Counter()
+    bucket_players: list[set[str]] = [set() for _ in range(NUM_ELO_BUCKETS)]
     seen_games = kept_games = positions = 0
 
-    def bucket_open(elo: int) -> bool:
-        return max_per_bucket is None or per_bucket[elo_to_bucket(elo)] < max_per_bucket
+    def side_open(elo_header: str, player_header: str, headers: chess.pgn.Headers) -> bool:
+        cap = cfg.max_positions_per_player
+        if cap and per_player[headers.get(player_header, "?")] >= cap:
+            return False
+        return max_per_bucket is None or per_bucket[elo_to_bucket(int(headers[elo_header]))] < max_per_bucket
 
     def wanted(headers: chess.pgn.Headers) -> bool:
         if not accept_game(headers, cfg):
             return False
-        if max_per_bucket is None:
-            return True
         try:
-            return bucket_open(int(headers["WhiteElo"])) or bucket_open(int(headers["BlackElo"]))
+            return side_open("WhiteElo", "White", headers) or side_open("BlackElo", "Black", headers)
         except (KeyError, ValueError):
             return False
 
@@ -358,7 +386,9 @@ def build_dataset(
             "Hoàn tất (%s): %d ván đọc, %d ván giữ (%.2f%%), %d vị trí — %s",
             reason, seen_games, kept_games, 100.0 * kept_games / max(seen_games, 1), positions, splits,
         )
-        return BuildResult(splits, list(per_bucket), seen_games, kept_games, reason)
+        return BuildResult(splits, list(per_bucket), seen_games, kept_games, reason,
+                           players=len(per_player),
+                           players_per_bucket=[len(names) for names in bucket_players])
 
     for source in sources:
         LOGGER.info("Đang đọc %s", source)
@@ -371,13 +401,21 @@ def build_dataset(
             rows = extract_samples(game, cfg)
             if rows:
                 split = split_for(rows[0]["game_key"], val_ratio, test_ratio)
+                if split == "train" and cfg.positions_per_side:
+                    rows = sample_per_side(rows, cfg.positions_per_side, rows[0]["game_key"])
+                players = {"w": game.headers.get("White", "?"), "b": game.headers.get("Black", "?")}
                 added = 0
                 for row in rows:
                     bucket = elo_to_bucket(row["elo"])
                     if max_per_bucket is not None and per_bucket[bucket] >= max_per_bucket:
                         continue
+                    player = players[row["fen"].split(" ", 2)[1]]
+                    if cfg.max_positions_per_player and per_player[player] >= cfg.max_positions_per_player:
+                        continue
                     writer.add(split, row)
                     per_bucket[bucket] += 1
+                    per_player[player] += 1
+                    bucket_players[bucket].add(player)
                     added += 1
                 if added:
                     kept_games += 1

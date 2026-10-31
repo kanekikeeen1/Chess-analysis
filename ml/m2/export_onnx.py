@@ -108,7 +108,57 @@ def export(
 
     if verify:
         _verify(model, out, planes, bucket, elo_norm)
+        _write_reference(out)
     return out
+
+
+REFERENCE_FENS = [
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+    "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+    "r2q1rk1/pp2bppp/2n1pn2/3p4/3P4/2NBPN2/PP3PPP/R2Q1RK1 b - - 3 10",
+    "1n2k3/P7/8/8/8/8/8/4K3 w - - 0 1",
+]
+REFERENCE_ELOS = [800, 1500, 2200, 2700]
+
+
+def _write_reference(onnx_path: Path) -> None:
+    """Ghi top-5 nước và xác suất do ONNX Runtime (Python) tính ra.
+
+    Test Java chạy cùng file .onnx trên cùng các thế cờ và phải ra đúng các số này:
+    đó là phép kiểm tra trọn vẹn cả bộ mã hóa Java, cách gọi ONNX Runtime Java lẫn
+    phép softmax trên nước hợp lệ.
+    """
+    import chess
+    import onnxruntime
+
+    from .encoding import elo_to_bucket, encode_board, legal_move_mask, move_to_index, normalize_elo
+
+    session = onnxruntime.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    cases = []
+    for fen in REFERENCE_FENS:
+        board = chess.Board(fen)
+        mask = legal_move_mask(board)
+        for elo in REFERENCE_ELOS:
+            logits = session.run(None, {
+                "planes": encode_board(board)[None],
+                "elo_bucket": np.array([elo_to_bucket(elo)], dtype=np.int64),
+                "elo_norm": np.array([normalize_elo(elo)], dtype=np.float32),
+            })[0][0].astype(np.float64)
+            logits[~mask] = -np.inf
+            probabilities = np.exp(logits - logits.max())
+            probabilities /= probabilities.sum()
+            ranked = sorted(board.legal_moves,
+                            key=lambda m: -probabilities[move_to_index(m, board.turn)])[:5]
+            cases.append({
+                "fen": fen,
+                "elo": elo,
+                "top": [{"uci": m.uci(), "probability": float(probabilities[move_to_index(m, board.turn)])}
+                        for m in ranked],
+            })
+    path = onnx_path.with_suffix(".reference.json")
+    path.write_text(json.dumps({"cases": cases}, indent=1), encoding="utf-8")
+    LOGGER.info("Đã ghi kết quả tham chiếu %s (%d trường hợp)", path, len(cases))
 
 
 def _verify(

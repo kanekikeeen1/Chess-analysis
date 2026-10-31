@@ -14,6 +14,7 @@ import {
   Puzzle,
   Repeat2,
   SearchCheck,
+  Swords,
   X,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -24,6 +25,7 @@ const navigation = [
   { href: "/", label: "Trang chủ", icon: Home },
   { href: "/analysis", label: "Phân tích", icon: SearchCheck },
   { href: "/archive", label: "Kho ván cờ", icon: Archive, protected: true },
+  { href: "/play", label: "Đấu bot", icon: Swords },
   { href: "/puzzles", label: "Puzzle", icon: Puzzle },
   { href: "/mistakes", label: "Sai lầm", icon: Repeat2, protected: true },
   { href: "/review", label: "Ôn tập", icon: CalendarCheck, protected: true },

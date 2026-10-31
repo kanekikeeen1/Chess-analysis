@@ -20,4 +20,7 @@ public record GameDetailResponse(
         Integer moveCount,
         String analysisJson,
         Instant createdAt,
-        Instant updatedAt) {}
+        Instant updatedAt,
+        String userSide,
+        Integer estimatedElo,
+        Integer eloStdError) {}

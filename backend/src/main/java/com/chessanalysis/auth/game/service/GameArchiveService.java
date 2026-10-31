@@ -19,6 +19,7 @@ import com.chessanalysis.auth.game.dto.GameSummaryResponse;
 import com.chessanalysis.auth.game.dto.SaveGameRequest;
 import com.chessanalysis.auth.game.entity.AnalyzedGame;
 import com.chessanalysis.auth.game.repository.AnalyzedGameRepository;
+import com.chessanalysis.auth.profile.PlayingProfileService;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +32,7 @@ public class GameArchiveService {
     private final AuthService authService;
     private final AnalysisJobRepository jobs;
     private final AnalyzedMoveWriter moveWriter;
+    private final PlayingProfileService playingProfiles;
     private final ObjectMapper objectMapper;
 
     public GameArchiveService(
@@ -38,11 +40,13 @@ public class GameArchiveService {
             AuthService authService,
             AnalysisJobRepository jobs,
             AnalyzedMoveWriter moveWriter,
+            PlayingProfileService playingProfiles,
             ObjectMapper objectMapper) {
         this.games = games;
         this.authService = authService;
         this.jobs = jobs;
         this.moveWriter = moveWriter;
+        this.playingProfiles = playingProfiles;
         this.objectMapper = objectMapper;
     }
 
@@ -73,8 +77,12 @@ public class GameArchiveService {
                 request.moveCount(),
                 request.analysisJson(),
                 Instant.now());
+        game.setUserSide(request.userSide());
         AnalyzedGame saved = games.saveAndFlush(game);
-        if (job != null) indexMoves(saved, user.getId(), job);
+        if (job != null) {
+            indexMoves(saved, user.getId(), job);
+            estimateElo(saved, job);
+        }
         return toDetail(saved);
     }
 
@@ -111,6 +119,15 @@ public class GameArchiveService {
         }
     }
 
+    /** Như {@link #indexMoves}: thiếu mô hình M2 hay ước lượng lỗi thì ván vẫn được lưu, chỉ không có Elo. */
+    private void estimateElo(AnalyzedGame game, CompletedJob job) {
+        try {
+            playingProfiles.recordGame(game, job.request().moves());
+        } catch (Exception exception) {
+            LOGGER.warn("Không ước lượng được Elo cho ván {}", game.getId(), exception);
+        }
+    }
+
     private record CompletedJob(CreateAnalysisJobRequest request, AnalysisResultResponse result) {}
 
     @Transactional(readOnly = true)
@@ -131,6 +148,8 @@ public class GameArchiveService {
     public void delete(String token, Long id) {
         UserAccount user = authService.requireCurrentAccount(token);
         games.delete(findOwned(id, user.getId()));
+        games.flush();
+        playingProfiles.refresh(user.getId());
     }
 
     private AnalyzedGame findOwned(Long id, Long userId) {
@@ -140,6 +159,10 @@ public class GameArchiveService {
 
     private Double roundAccuracy(Double value) {
         return value == null ? null : Math.round(value * 100.0) / 100.0;
+    }
+
+    private Integer rounded(Double value) {
+        return value == null ? null : (int) Math.round(value);
     }
 
     private String trimToNull(String value) {
@@ -152,7 +175,8 @@ public class GameArchiveService {
                 game.getId(), game.getTitle(), game.getWhitePlayer(), game.getBlackPlayer(),
                 game.getResult(), game.getSourceType(), game.getOpeningEco(), game.getOpeningName(),
                 game.getWhiteAccuracy(), game.getBlackAccuracy(), game.getDepth(), game.getMoveCount(),
-                game.getCreatedAt());
+                game.getCreatedAt(), game.getUserSide(), rounded(game.getEstimatedElo()),
+                rounded(game.getEloStdError()));
     }
 
     private GameDetailResponse toDetail(AnalyzedGame game) {
@@ -160,6 +184,7 @@ public class GameArchiveService {
                 game.getId(), game.getTitle(), game.getWhitePlayer(), game.getBlackPlayer(),
                 game.getResult(), game.getSourceType(), game.getPgn(), game.getInitialFen(), game.getFinalFen(),
                 game.getOpeningEco(), game.getOpeningName(), game.getWhiteAccuracy(), game.getBlackAccuracy(),
-                game.getDepth(), game.getMoveCount(), game.getAnalysisJson(), game.getCreatedAt(), game.getUpdatedAt());
+                game.getDepth(), game.getMoveCount(), game.getAnalysisJson(), game.getCreatedAt(), game.getUpdatedAt(),
+                game.getUserSide(), rounded(game.getEstimatedElo()), rounded(game.getEloStdError()));
     }
 }

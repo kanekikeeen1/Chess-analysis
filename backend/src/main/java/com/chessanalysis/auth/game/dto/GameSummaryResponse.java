@@ -15,4 +15,7 @@ public record GameSummaryResponse(
         Double blackAccuracy,
         Integer depth,
         Integer moveCount,
-        Instant createdAt) {}
+        Instant createdAt,
+        String userSide,
+        Integer estimatedElo,
+        Integer eloStdError) {}

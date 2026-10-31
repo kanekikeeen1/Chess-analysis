@@ -79,6 +79,26 @@ public class AnalyzedGame {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Bên người dùng cầm ({@code w}/{@code b}); {@code null} khi ván không phải của họ hoặc không rõ. */
+    @Column(name = "user_side", length = 1)
+    private String userSide;
+
+    @Column(name = "estimated_elo")
+    private Double estimatedElo;
+
+    @Column(name = "elo_std_error")
+    private Double eloStdError;
+
+    @Column(name = "elo_moves")
+    private Integer eloMoves;
+
+    /** Bước huấn luyện của mô hình M2 đã ước lượng, để biết ước lượng nào đã cũ khi đổi mô hình. */
+    @Column(name = "elo_model_step")
+    private Integer eloModelStep;
+
+    @Column(name = "elo_log_likelihood_json", columnDefinition = "TEXT")
+    private String eloLogLikelihoodJson;
+
     protected AnalyzedGame() {}
 
     public AnalyzedGame(
@@ -138,4 +158,20 @@ public class AnalyzedGame {
     public String getAnalysisJson() { return analysisJson; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public String getUserSide() { return userSide; }
+    public Double getEstimatedElo() { return estimatedElo; }
+    public Double getEloStdError() { return eloStdError; }
+    public Integer getEloMoves() { return eloMoves; }
+    public Integer getEloModelStep() { return eloModelStep; }
+    public String getEloLogLikelihoodJson() { return eloLogLikelihoodJson; }
+
+    public void setUserSide(String userSide) { this.userSide = userSide; }
+
+    public void setEloEstimate(double elo, double stdError, int moves, Integer modelStep, String logLikelihoodJson) {
+        this.estimatedElo = elo;
+        this.eloStdError = stdError;
+        this.eloMoves = moves;
+        this.eloModelStep = modelStep;
+        this.eloLogLikelihoodJson = logLikelihoodJson;
+    }
 }

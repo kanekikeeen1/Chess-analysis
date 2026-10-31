@@ -5,6 +5,7 @@ import {
   Archive,
   CalendarDays,
   Eye,
+  Gauge,
   LoaderCircle,
   LockKeyhole,
   SearchCheck,
@@ -15,6 +16,7 @@ import {
 import { useAuth } from "@/app/auth-provider";
 import { backendRequest } from "@/lib/backend-api";
 import type { GameSummary } from "@/lib/domain-types";
+import type { PlayingProfile } from "@/lib/human-moves";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("vi-VN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -35,10 +37,17 @@ export default function ArchivePage() {
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [profile, setProfile] = useState<PlayingProfile | null>(null);
+
+  const loadProfile = useCallback(() => {
+    // Hồ sơ chỉ là phần thêm: lỗi ở đây không chặn kho ván cờ.
+    void backendRequest<PlayingProfile>("/api/profile/playing").then(setProfile).catch(() => setProfile(null));
+  }, []);
 
   const loadGames = useCallback(async () => {
     setIsLoading(true);
     setError("");
+    loadProfile();
     try {
       setGames(await backendRequest<GameSummary[]>("/api/games"));
     } catch (caughtError) {
@@ -46,7 +55,7 @@ export default function ArchivePage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadProfile]);
 
   useEffect(() => {
     setSavedNotice(new URLSearchParams(window.location.search).has("saved"));
@@ -67,6 +76,7 @@ export default function ArchivePage() {
     try {
       await backendRequest<void>(`/api/games/${id}`, { method: "DELETE" });
       setGames((current) => current.filter((game) => game.id !== id));
+      loadProfile();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : "Không thể xóa ván cờ.");
     } finally {
@@ -97,6 +107,28 @@ export default function ArchivePage() {
           </div>
         )}
 
+        {profile && (
+          <section className="mt-6 flex flex-col gap-3 rounded-3xl border border-[#78a7ff]/20 bg-[#78a7ff]/8 p-5 sm:flex-row sm:items-center">
+            <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-[#78a7ff]/15 text-[#a9c4ff]"><Gauge className="size-6" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-[#a9c4ff]">Elo ước lượng của bạn (mô hình M2)</p>
+              {profile.estimatedElo != null ? (
+                <p className="mt-1 text-3xl font-semibold tabular-nums text-white">
+                  {profile.estimatedElo}
+                  <span className="ml-2 text-base font-medium text-[#96a098]">±{profile.eloStdError}</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-[#c7d0c9]">Chưa có ván nào để ước lượng.</p>
+              )}
+              <p className="mt-1 text-xs leading-5 text-[#96a098]">
+                {profile.gamesAnalyzed > 0
+                  ? `Từ ${profile.movesAnalyzed} nước trong ${profile.gamesAnalyzed} ván bạn đã lưu và chọn bên mình cầm. Sai số nhỏ dần khi có thêm ván.`
+                  : "Khi lưu một ván sau Game Review, hãy chọn bên bạn cầm để mô hình ước lượng trình độ từ cách bạn chọn nước."}
+              </p>
+            </div>
+          </section>
+        )}
+
         {isLoading ? (
           <div className="mt-10 grid place-items-center rounded-3xl border border-white/8 bg-[#1a211d] py-20"><LoaderCircle className="size-8 animate-spin text-[#d8b45f]" /></div>
         ) : games.length === 0 ? (
@@ -123,6 +155,11 @@ export default function ArchivePage() {
                       <AccuracyPill label="Trắng" value={game.whiteAccuracy} />
                       <AccuracyPill label="Đen" value={game.blackAccuracy} />
                       <span className="rounded-lg bg-white/6 px-2.5 py-1 text-xs text-[#aeb8b1]">{game.moveCount} lượt · Depth {game.depth ?? "—"}</span>
+                      {game.estimatedElo != null && (
+                        <span className="rounded-lg bg-[#78a7ff]/12 px-2.5 py-1 text-xs text-[#a9c4ff]">
+                          Elo {game.userSide === "b" ? "Đen" : "Trắng"} (bạn) ~<strong className="text-white">{game.estimatedElo}</strong> ±{game.eloStdError}
+                        </span>
+                      )}
                       <span className="inline-flex items-center gap-1 rounded-lg bg-[#72cf86]/10 px-2.5 py-1 text-xs font-semibold text-[#8bd99a]"><Trophy className="size-3.5" /> {game.result}</span>
                     </div>
                   </a>

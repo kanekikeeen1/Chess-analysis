@@ -32,4 +32,9 @@ public record SaveGameRequest(
          * Mã tác vụ review đã sinh ra báo cáo này. Không bắt buộc: khi có, backend
          * đọc lại đặc trưng từng nước từ tác vụ đó để ghi bảng analyzed_moves.
          */
-        @Size(max = 36) String analysisJobId) {}
+        @Size(max = 36) String analysisJobId,
+        /**
+         * Bên người dùng cầm ({@code w}/{@code b}). Khi có, backend ước lượng Elo của bên đó bằng M2 và
+         * cộng vào hồ sơ người chơi; bỏ trống khi ván không phải của họ.
+         */
+        @Pattern(regexp = "[wb]", message = "Bên của bạn phải là w hoặc b.") String userSide) {}

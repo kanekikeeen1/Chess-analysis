@@ -52,6 +52,10 @@ def main() -> None:
     parser.add_argument("--max-elo-gap", type=int, default=300)
     parser.add_argument("--min-base-seconds", type=int, default=180)
     parser.add_argument("--skip-opening-plies", type=int, default=10)
+    parser.add_argument("--positions-per-side", type=int, default=8,
+                        help="Số vị trí tối đa lấy từ mỗi bên của một ván train (0 = lấy hết)")
+    parser.add_argument("--max-per-player", type=int, default=3000,
+                        help="Số vị trí tối đa của một tài khoản (0 = không giới hạn)")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -70,6 +74,8 @@ def main() -> None:
         max_elo_gap=args.max_elo_gap,
         min_base_seconds=args.min_base_seconds,
         skip_opening_plies=args.skip_opening_plies,
+        positions_per_side=args.positions_per_side or None,
+        max_positions_per_player=args.max_per_player or None,
     )
 
     result = build_dataset(
@@ -99,6 +105,8 @@ def main() -> None:
         "per_bucket_limit": args.per_bucket or None,
         "games_seen": result.games_seen,
         "games_kept": result.games_kept,
+        "players": result.players,
+        "players_per_elo_bucket": {bucket_label(b): result.players_per_bucket[b] for b in range(NUM_ELO_BUCKETS)},
         "stop_reason": result.stop_reason,
         "splits": result.splits,
         "positions_per_elo_bucket": per_bucket,
@@ -114,7 +122,8 @@ def main() -> None:
         print(f"  {split:<6} {count:>12,} vị trí")
     print("\nPhân bố theo dải Elo:")
     for label, count in per_bucket.items():
-        print(f"  {label:>12}  {count:>12,}")
+        players = result.players_per_bucket[list(per_bucket).index(label)]
+        print(f"  {label:>12}  {count:>12,} vị trí  {players:>8,} người chơi")
 
 
 if __name__ == "__main__":

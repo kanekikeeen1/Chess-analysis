@@ -1,0 +1,47 @@
+# M2 lần 2 trên RTX 5060 Ti 8 GB — dữ liệu đa dạng hơn, có dừng sớm.
+#
+#   python -m m2.train --config config/m2-rtx5060ti-v2.yaml
+#
+# Khác lần 1 (m2-rtx5060ti.yaml):
+# - Dữ liệu data/m2-v2: tối đa 8 vị trí mỗi bên của một ván train và 3.000 vị trí mỗi
+#   tài khoản, nên cùng ~2 triệu vị trí nhưng đến từ nhiều ván và nhiều người hơn hẳn.
+#   Lần 1 lấy cả ván (~58 vị trí/ván, chỉ 34.5k ván) nên quá khớp từ bước 8.000.
+# - Dừng sớm khi loss validation không giảm sau 6 lần đánh giá (6.000 bước).
+
+data_dir: data/m2-v2
+run_dir: runs/m2-rtx5060ti-v2
+
+batch_size: 512
+epochs: 8
+lr: 0.002
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 1500
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 8
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 1000
+eval_batches: 60
+log_every: 100
+save_every: 2000
+val_rows: 40000
+early_stop_patience: 6
+
+amp: true
+seed: 1337
+max_steps: null
+
+model:
+  channels: 128
+  blocks: 10
+  elo_dim: 64
+  policy_channels: 32
+  value_channels: 16
+  value_head: true
+  dropout: 0.0

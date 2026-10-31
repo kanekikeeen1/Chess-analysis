@@ -123,7 +123,7 @@ def plot_validation_accuracy(history: list[dict], path: Path) -> None:
     save(fig, path)
 
 
-def plot_accuracy_by_elo(per_bucket: list[dict], path: Path) -> None:
+def plot_accuracy_by_elo(per_bucket: list[dict], path: Path, stockfish: dict | None = None) -> None:
     labels = [r["label"] for r in per_bucket]
     x = range(len(labels))
     width = 0.27
@@ -133,12 +133,20 @@ def plot_accuracy_by_elo(per_bucket: list[dict], path: Path) -> None:
     for offset, (key, name, color, hatch) in zip((-width, 0, width), series):
         ax.bar([i + offset for i in x], [r[key] for r in per_bucket], width, color=color, label=name,
                edgecolor=SURFACE, linewidth=1.5, hatch=hatch)
+    top = max(r["top1"] for r in per_bucket)
+    if stockfish:
+        # Vạch ngang màu mực: mốc so sánh, không phải một chuỗi dữ liệu cùng loại với các cột.
+        engine = {r["label"]: r["top1"] for r in stockfish["perBucket"]}
+        points = [(i, engine[label]) for i, label in zip(x, labels) if label in engine]
+        ax.scatter([i for i, _ in points], [v for _, v in points], marker="_", s=900, linewidths=2.2,
+                   color=TEXT, zorder=3, label=f"Stockfish depth {stockfish['depth']}")
+        top = max([top, *[v for _, v in points]])
     ax.set_xticks(list(x), labels, rotation=30, ha="right")
     ax.set_title("Top-1 theo dải Elo (tập test)")
     ax.set_xlabel("Dải Elo Lichess của người đi nước")
-    ax.set_ylim(0, max(r["top1"] for r in per_bucket) * 1.38)
+    ax.set_ylim(0, top * 1.38)
     percent_axis(ax)
-    ax.legend(loc="upper center", ncol=3)
+    ax.legend(loc="upper center", ncol=4 if stockfish else 3, fontsize=8.5, markerscale=0.6)
     save(fig, path)
 
 
@@ -160,20 +168,22 @@ def plot_elo_contribution(per_bucket: list[dict], path: Path) -> None:
     save(fig, path)
 
 
-def plot_interpolation(interpolation: dict, path: Path) -> None:
+def plot_interpolation(interpolation: dict, path: Path, nll: bool = False) -> None:
     labels = interpolation["labels"]
-    matrix = interpolation["matrix"]
+    matrix = interpolation["nllMatrix" if nll else "matrix"]
     size = len(labels)
-    cmap = LinearSegmentedColormap.from_list("blue", SEQUENTIAL)
+    # Với NLL, thấp hơn là tốt hơn: đảo thang màu để ô tốt vẫn là ô đậm.
+    cmap = LinearSegmentedColormap.from_list("blue", SEQUENTIAL[::-1] if nll else SEQUENTIAL)
     values = [v for row in matrix for v in row]
     fig, ax = plt.subplots(figsize=(9, 7.4))
     ax.grid(False)
     image = ax.imshow(matrix, cmap=cmap, vmin=min(values), vmax=max(values))
     for i, row in enumerate(matrix):
-        best = max(range(size), key=lambda j: row[j])
+        best = (min if nll else max)(range(size), key=lambda j: row[j])
         for j, value in enumerate(row):
             dark = (value - min(values)) / max(max(values) - min(values), 1e-9) > 0.55
-            ax.text(j, i, f"{value * 100:.1f}", ha="center", va="center", fontsize=7.5,
+            dark = not dark if nll else dark
+            ax.text(j, i, f"{value:.3f}" if nll else f"{value * 100:.1f}", ha="center", va="center", fontsize=7.5,
                     color="#ffffff" if dark else TEXT, fontweight="bold" if j == best else "normal")
         # Khung đậm: cột hỏi cho kết quả tốt nhất ở hàng này. Nằm trên đường chéo nghĩa là
         # mô hình khớp người chơi nhất khi được hỏi đúng dải Elo của họ.
@@ -182,9 +192,14 @@ def plot_interpolation(interpolation: dict, path: Path) -> None:
     ax.set_yticks(range(size), labels)
     ax.set_xlabel("Elo được hỏi")
     ax.set_ylabel("Elo thật của người chơi")
-    ax.set_title(f"Ma trận nội suy Elo (top-1, %) · đường chéo thắng {interpolation['diagonalWins']}/{size} hàng")
+    if nll:
+        ax.set_title(f"Ma trận nội suy Elo (NLL, thấp hơn = khớp hơn) · đường chéo thắng "
+                     f"{interpolation['nllDiagonalWins']}/{size} hàng")
+    else:
+        ax.set_title(f"Ma trận nội suy Elo (top-1, %) · đường chéo thắng {interpolation['diagonalWins']}/{size} hàng")
     colorbar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
-    colorbar.ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0, decimals=0))
+    if not nll:
+        colorbar.ax.yaxis.set_major_formatter(matplotlib.ticker.PercentFormatter(1.0, decimals=0))
     colorbar.outline.set_visible(False)
     save(fig, path)
 
@@ -252,6 +267,7 @@ def main() -> None:
     overall = evaluation["accuracy"]["overall"]
     interpolation = evaluation["interpolation"]
     estimation = evaluation["eloEstimation"]
+    stockfish = evaluation.get("stockfish")
 
     tables = out / "tables"
     write_csv(tables / "accuracy_by_elo.csv",
@@ -261,6 +277,15 @@ def main() -> None:
               + [["TỔNG", overall["n"], round(overall["top1"], 4), round(overall["top3"], 4),
                   round(overall["baselineUniform"], 4), round(overall["baselineNoElo"], 4),
                   round((overall["top1"] - overall["baselineNoElo"]) * 100, 2)]])
+    if interpolation.get("nllMatrix"):
+        write_csv(tables / "interpolation_nll.csv", ["Elo thật \\ Elo hỏi", *interpolation["labels"]],
+                  [[label, *[round(v, 4) for v in row]]
+                   for label, row in zip(interpolation["labels"], interpolation["nllMatrix"])])
+    if stockfish:
+        write_csv(tables / "stockfish_baseline.csv", ["Dải Elo", "Số vị trí", "Top-1", "Top-3"],
+                  [[r["label"], r["n"], round(r["top1"], 4), round(r["top3"], 4)] for r in stockfish["perBucket"]]
+                  + [["TỔNG", stockfish["overall"]["n"], round(stockfish["overall"]["top1"], 4),
+                      round(stockfish["overall"]["top3"], 4)]])
     write_csv(tables / "interpolation_matrix.csv", ["Elo thật \\ Elo hỏi", *interpolation["labels"]],
               [[label, *[round(v, 4) for v in row]] for label, row in zip(interpolation["labels"], interpolation["matrix"])])
     write_csv(tables / "elo_estimation.csv", ["Số nước", "MAE", "Trung vị", "P90"],
@@ -272,17 +297,21 @@ def main() -> None:
         write_csv(tables / "train_loss.csv", ["Bước", "Loss train", "LR"],
                   [[r["step"], round(r["loss"], 4), r["lr"]] for r in train_log])
     if card:
-        write_csv(tables / "dataset_by_elo.csv", ["Dải Elo", "Số vị trí"],
-                  [[label, count] for label, count in card.get("positions_per_elo_bucket", {}).items()])
+        players = card.get("players_per_elo_bucket", {})
+        write_csv(tables / "dataset_by_elo.csv", ["Dải Elo", "Số vị trí", "Số người chơi"],
+                  [[label, count, players.get(label, "")]
+                   for label, count in card.get("positions_per_elo_bucket", {}).items()])
 
     figures = out / "figures"
     if history:
         plot_loss(train_log, history, figures / "01_loss.png")
         plot_validation_accuracy(history, figures / "02_validation_accuracy.png")
-    plot_accuracy_by_elo(per_bucket, figures / "03_accuracy_by_elo.png")
+    plot_accuracy_by_elo(per_bucket, figures / "03_accuracy_by_elo.png", stockfish)
     plot_elo_contribution(per_bucket, figures / "04_elo_contribution.png")
     plot_interpolation(interpolation, figures / "05_interpolation_matrix.png")
     plot_elo_estimation(estimation, figures / "06_elo_estimation.png")
+    if interpolation.get("nllMatrix"):
+        plot_interpolation(interpolation, figures / "07_interpolation_nll.png", nll=True)
 
     best_val = min(history, key=lambda r: r["loss"]) if history else None
     lines = [
@@ -300,7 +329,11 @@ def main() -> None:
         f"| Top-1 khi bỏ qua Elo | {overall['baselineNoElo']:.2%} |",
         f"| Đóng góp của Elo | {(overall['top1'] - overall['baselineNoElo']) * 100:+.2f} điểm % |",
         f"| Đoán đều mọi nước hợp lệ | {overall['baselineUniform']:.2%} |",
+        *([f"| Stockfish depth {stockfish['depth']} top-1 ({stockfish['overall']['n']:,} vị trí) | "
+           f"{stockfish['overall']['top1']:.2%} |"] if stockfish else []),
         f"| Đường chéo ma trận nội suy thắng | {interpolation['diagonalWins']}/{len(interpolation['labels'])} hàng |",
+        *([f"| Đường chéo thắng theo NLL | {interpolation['nllDiagonalWins']}/{len(interpolation['labels'])} hàng "
+           f"(lệch TB {interpolation['nllMeanOffset']:.2f} dải) |"] if interpolation.get("nllMatrix") else []),
         f"| MAE ước lượng Elo (80 nước, {estimation['players']} người) | {estimation['perMoveCount'][-1]['mae']:.0f} |",
         f"| Số vị trí test | {overall['n']:,} |",
     ]
@@ -309,7 +342,12 @@ def main() -> None:
     if card:
         lines += ["", "## Dữ liệu", "",
                   f"- Nguồn: {', '.join(card['source_files'])} ({card['source_license']})",
-                  f"- {card['games_seen']:,} ván đã đọc, {card['games_kept']:,} ván được dùng · dừng vì: {card['stop_reason']}",
+                  f"- {card['games_seen']:,} ván đã đọc, {card['games_kept']:,} ván được dùng"
+                  + (f", {card['players']:,} người chơi" if card.get("players") else "")
+                  + f" · dừng vì: {card['stop_reason']}",
+                  *([f"- Lấy mẫu train: tối đa {card['filters']['positions_per_side']} vị trí mỗi bên/ván, "
+                     f"{card['filters'].get('max_positions_per_player') or 'không giới hạn'} vị trí mỗi người"]
+                    if card["filters"].get("positions_per_side") else []),
                   f"- Split: {', '.join(f'{k} {v:,}' for k, v in card['splits'].items())} vị trí (chia theo ván)"]
     if train_config:
         model_config = train_config["model_config"] or {}

@@ -1,0 +1,56 @@
+{
+  "source_files": [
+    "https://database.lichess.org/standard/lichess_db_standard_rated_2026-09.pgn.zst"
+  ],
+  "source_license": "CC0 (Lichess open database)",
+  "filters": {
+    "min_elo": 600,
+    "max_elo": 3200,
+    "max_elo_gap": 300,
+    "min_base_seconds": 180,
+    "max_base_seconds": 10800,
+    "skip_opening_plies": 10,
+    "min_game_plies": 20,
+    "max_plies_per_game": 300,
+    "require_both_elos": true,
+    "drop_forced_moves": true,
+    "drop_time_forfeit_last_move": true,
+    "positions_per_side": 8,
+    "max_positions_per_player": 3000
+  },
+  "per_bucket_limit": 200000,
+  "games_seen": 9234922,
+  "games_kept": 121933,
+  "players": 63662,
+  "players_per_elo_bucket": {
+    "<1000": 9062,
+    "1000-1199": 9332,
+    "1200-1399": 9505,
+    "1400-1599": 9552,
+    "1600-1799": 8436,
+    "1800-1999": 7095,
+    "2000-2199": 5547,
+    "2200-2399": 4451,
+    "2400-2599": 2872,
+    "2600+": 1101
+  },
+  "stop_reason": "mọi dải Elo đã đủ",
+  "splits": {
+    "train": 1707397,
+    "test": 148183,
+    "val": 144420
+  },
+  "positions_per_elo_bucket": {
+    "<1000": 200000,
+    "1000-1199": 200000,
+    "1200-1399": 200000,
+    "1400-1599": 200000,
+    "1600-1799": 200000,
+    "1800-1999": 200000,
+    "2000-2199": 200000,
+    "2200-2399": 200000,
+    "2400-2599": 200000,
+    "2600+": 200000
+  },
+  "split_strategy": "hash theo game_key — không có ván nào nằm ở hai split"
+}

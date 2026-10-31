@@ -10,4 +10,6 @@ import com.chessanalysis.auth.game.entity.AnalyzedGame;
 public interface AnalyzedGameRepository extends JpaRepository<AnalyzedGame, Long> {
     List<AnalyzedGame> findAllByUserIdOrderByCreatedAtDesc(Long userId);
     Optional<AnalyzedGame> findByIdAndUserId(Long id, Long userId);
+    /** Các ván đã có Elo ước lượng cho bên người dùng; hồ sơ người chơi cộng từ đây. */
+    List<AnalyzedGame> findAllByUserIdAndEloLogLikelihoodJsonIsNotNull(Long userId);
 }

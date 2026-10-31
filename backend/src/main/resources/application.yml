@@ -43,6 +43,10 @@ app:
     # Nên bằng pool-size: nhiều worker hơn engine chỉ làm các tác vụ giành nhau.
     workers: ${ANALYSIS_WORKERS:2}
     queue-capacity: ${ANALYSIS_QUEUE_CAPACITY:32}
+  # Mô hình M2 đã xuất sang ONNX (python -m m2.export_onnx). Đường dẫn tính từ thư mục chạy
+  # backend; thiếu file thì backend vẫn chạy, chỉ /api/human-moves trả 503.
+  human-moves:
+    model-path: ${M2_MODEL_PATH:../ml/models/m2.onnx}
   # Tiêu chí lọc khi import Lichess Puzzle Database. Import chỉ chạy khi có tham số
   # --app.puzzles.import-file=<đường dẫn tới lichess_db_puzzle.csv.zst>.
   puzzles:
