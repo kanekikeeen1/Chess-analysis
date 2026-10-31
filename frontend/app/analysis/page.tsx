@@ -1026,6 +1026,28 @@ export default function AnalysisPage() {
             <h1 className="text-center text-2xl font-semibold tracking-tight">Game Analysis</h1>
           </div>
 
+          <div className="grid shrink-0 grid-cols-4 border-b border-white/10 bg-[#171c1a]" role="tablist" aria-label="Khu vực phân tích">
+            {SIDE_TABS.map(({ icon: Icon, id, label }) => {
+              const active = sideTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setSideTab(id)}
+                  className={`flex flex-col items-center gap-0.5 border-b-2 px-1 py-2 text-[11px] font-semibold transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#4b7fe8] ${active ? "border-[#4b7fe8] bg-[#202623] text-white" : "border-transparent text-[#8e9991] hover:bg-white/5 hover:text-[#dce1db]"}`}
+                >
+                  <Icon className="size-4" />
+                  <span>
+                    {label}
+                    {id === "report" && reviewMode && !reviewComplete ? ` ${reviewCompleted}/${reviewTotal}` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="analysis-scroll lg:min-h-0 lg:flex-1 lg:overflow-y-scroll lg:overscroll-contain">
           {archiveLoading && (
             <div className="flex items-center gap-2 border-b border-white/10 bg-[#d8b45f]/10 px-4 py-3 text-sm text-[#f0d994]">
@@ -1056,7 +1078,15 @@ export default function AnalysisPage() {
             </span>
           </div>
 
-          {reviewMode && (
+          {sideTab === "report" && !reviewMode && (
+            <div className="border-b border-white/10 px-4 py-6 text-center">
+              <p className="text-sm font-semibold text-white">Chưa có báo cáo</p>
+              <p className="mt-1 text-xs leading-5 text-[#8e9991]">Dán PGN ở tab Nạp ván rồi bấm Phân tích để có độ chính xác, nhãn từng nước và Elo ước lượng.</p>
+              <button type="button" onClick={() => setSideTab("load")} className="mt-3 rounded-lg bg-[#4b7fe8] px-3 py-2 text-xs font-semibold text-white hover:bg-[#5b8cf0]">Mở tab Nạp ván</button>
+            </div>
+          )}
+
+          {sideTab === "report" && reviewMode && (
             <>
               {reviewTimeline && (
                 <section className="border-b border-white/10 bg-[#171c1a] p-3">
@@ -1137,16 +1167,21 @@ export default function AnalysisPage() {
             </>
           )}
 
+          {sideTab === "human" && (
+            <HumanMovesPanel
+              fen={currentFen}
+              gameOver={currentGame.isGameOver()}
+              onPlayMove={playHumanMove}
+              playedUci={uciMoves[currentIndex] ?? null}
+            />
+          )}
+
+          {sideTab === "engine" && (
+          <>
           <EngineLines
             fen={currentFen}
             evaluation={currentEvaluation}
             targetDepth={reviewMode ? undefined : INTERACTIVE_DEPTH}
-          />
-
-          <HumanMovesPanel
-            fen={currentFen}
-            gameOver={currentGame.isGameOver()}
-            onPlayMove={playHumanMove}
           />
 
           <OpeningCard
@@ -1157,8 +1192,10 @@ export default function AnalysisPage() {
             match={openingMatch}
             moves={moves}
           />
+          </>
+          )}
 
-          {moveAssessment && (
+          {(sideTab === "engine" || sideTab === "report") && moveAssessment && (
             <div className="border-b border-white/10 bg-[#171c1a] p-3">
               <div className={`rounded-lg px-3 py-2 text-sm font-semibold ${moveAssessment.className}`}>
                 <div className="flex items-center gap-2">
@@ -1188,6 +1225,7 @@ export default function AnalysisPage() {
             </div>
           )}
 
+          {sideTab !== "load" && (
           <MoveHistory
             assessments={moveAssessments}
             currentIndex={currentIndex}
@@ -1196,7 +1234,10 @@ export default function AnalysisPage() {
             onSelect={goToPosition}
             showAssessmentSummary={!reviewMode || reviewComplete}
           />
+          )}
 
+          {sideTab === "load" && (
+          <>
           <div className="space-y-3 p-3">
             <div className="grid grid-cols-[1fr_142px] overflow-hidden rounded-xl border border-white/10 bg-[#333a37]">
               <div className="flex items-center px-4 text-sm font-medium text-[#dce1db]">
@@ -1278,6 +1319,8 @@ export default function AnalysisPage() {
               </button>
             </div>
           </div>
+          </>
+          )}
 
           <div className="border-t border-white/10 px-4 py-3">
             <p className="text-sm text-[#aeb8b1]" aria-live="polite">{message}</p>

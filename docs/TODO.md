@@ -96,7 +96,7 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   bấm để đi thử); thẻ "Elo ước lượng của ván" (`POST /api/human-moves/estimate`); lưu ván kèm bên mình cầm →
   V20 lưu đường log-likelihood từng ván, hồ sơ = hậu nghiệm của tổng (`GET /api/profile/playing`, hiện ở Kho
   ván cờ); trang `/play` đấu bot (lấy mẫu trong top-10, có "Đi lại", chuyển ván sang trang phân tích).
-  Còn: chạy thử trên giao diện.*
+  Vòng 2: cột phải trang phân tích chia 4 tab (Engine · Theo Elo · Báo cáo · Nạp ván); panel M2 thành bảng so sánh (hàng = nước, cột = mức Elo, `compare=true` trả cùng tập nước cho mọi mức), có câu tóm tắt, cảnh báo bẫy, nước thực sự đi trong ván; hỏi mô hình trước rồi Stockfish sau, cache theo FEN, chỉ gọi khi mở tab. Còn: chạy thử trên giao diện.*
 
 ## Giai đoạn D — Phong cách đại kiện tướng: Lê Quang Liêm, Magnus Carlsen, Daniil Dubov · ~8–12 ngày + GPU
 
