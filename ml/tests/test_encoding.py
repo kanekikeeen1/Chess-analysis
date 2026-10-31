@@ -153,14 +153,21 @@ def test_elo_buckets_are_ordered_and_cover_range():
     for edge in ELO_BUCKET_EDGES:
         assert elo_to_bucket(edge) == elo_to_bucket(edge - 1) + 1
 
-    buckets = [elo_to_bucket(e) for e in range(700, 2500, 25)]
+    buckets = [elo_to_bucket(e) for e in range(700, 3000, 25)]
     assert buckets == sorted(buckets)
+
+
+def test_buckets_reach_master_level():
+    assert NUM_ELO_BUCKETS == 10
+    assert bucket_label(NUM_ELO_BUCKETS - 1) == "2600+"
+    assert elo_to_bucket(2650) == elo_to_bucket(3100) == NUM_ELO_BUCKETS - 1
+    assert elo_to_bucket(2599) == NUM_ELO_BUCKETS - 2
 
 
 def test_bucket_labels_and_centers():
     for bucket in range(NUM_ELO_BUCKETS):
         assert bucket_label(bucket)
-        assert 700 <= bucket_center(bucket) <= 2100
+        assert 800 <= bucket_center(bucket) <= 2800
         assert elo_to_bucket(bucket_center(bucket)) == bucket
 
 

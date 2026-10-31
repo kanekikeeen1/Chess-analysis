@@ -40,10 +40,15 @@ from .dataset import (
     collate,
     count_rows,
 )
-from .encoding import NUM_ELO_BUCKETS
+from .encoding import NUM_ELO_BUCKETS, bucket_center, normalize_elo
 from .model import EloConditionedPolicyNet, ModelConfig
 
 LOGGER = logging.getLogger("m2.train")
+
+# Elo chuẩn hóa ở tâm mỗi dải, dùng khi hỏi mạng ở một dải khác dải thật.
+BUCKET_CENTER_NORM = torch.tensor(
+    [normalize_elo(bucket_center(b)) for b in range(NUM_ELO_BUCKETS)], dtype=torch.float32
+)
 
 
 @dataclasses.dataclass
@@ -145,8 +150,12 @@ def evaluate(
         # đúng dải của họ.
         # Phải che nước bất hợp lệ y hệt nhánh trên, nếu không phép so sánh
         # đo tác dụng của việc che chứ không đo điều kiện hóa Elo.
+        # Elo liên tục phải khớp với dải đã đổi: bản trước truyền -elo_norm, tạo ra
+        # cặp (dải, Elo) mâu thuẫn mà mạng chưa từng thấy, nên elo_sep đo độ "vỡ"
+        # của mạng trên đầu vào lạ (tăng vọt tới hàng trăm) chứ không đo tác dụng
+        # của Elo. Ma trận nội suy trong evaluate.py vốn đã dùng cặp khớp nhau.
         shifted = (bucket + NUM_ELO_BUCKETS // 2) % NUM_ELO_BUCKETS
-        wrong_logits, _ = model(planes, shifted, -elo_norm)
+        wrong_logits, _ = model(planes, shifted, BUCKET_CENTER_NORM.to(device)[shifted])
         if mask is not None:
             wrong_logits = wrong_logits.masked_fill(~mask, float("-inf"))
         right_elo_ll += -F.cross_entropy(logits, target, reduction="mean").item()
@@ -245,6 +254,7 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
         LOGGER.info("Chạy tiếp từ %s (bước %d, epoch %d)", resume, step, start_epoch)
 
     history_path = run_dir / "history.jsonl"
+    train_log_path = run_dir / "train_log.jsonl"
     best_top1 = 0.0
     started = time.time()
     running_loss = 0.0
@@ -287,10 +297,15 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
 
             if step % cfg.log_every == 0:
                 rate = step * cfg.batch_size / max(time.time() - started, 1e-9)
+                train_loss = running_loss / max(running_n, 1)
                 LOGGER.info(
                     "bước %6d/%d · loss %.4f · lr %.2e · %.0f mẫu/s",
-                    step, total_steps, running_loss / max(running_n, 1), lr, rate,
+                    step, total_steps, train_loss, lr, rate,
                 )
+                # Ghi ra file để vẽ đường loss train cạnh loss validation trong báo cáo.
+                with train_log_path.open("a", encoding="utf-8") as handle:
+                    handle.write(json.dumps({"step": step, "epoch": epoch, "loss": train_loss,
+                                             "lr": lr, "samples_per_s": rate}) + "\n")
                 running_loss = 0.0
                 running_n = 0
 

@@ -59,19 +59,26 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
 > Pipeline đã có trong `ml/m2/` (mạng ResNet + FiLM điều kiện hóa Elo). Việc còn lại là mở
 > rộng dải Elo lên mức kiện tướng, huấn luyện thật và đưa vào web.
 
-- [ ] **C1 Chốt các mức Elo hiển thị trên web**
+- [x] **C1 Chốt các mức Elo hiển thị trên web** — đã áp dụng 10 dải trong `encoding.py`.
   Hiện tại `ELO_BUCKET_EDGES = (1100, 1300, 1500, 1700, 1900)` và dữ liệu bị cắt ở 2600.
   Đề xuất: **1000 · 1200 · 1400 · 1600 · 1800 · 2000 · 2200 · 2400 · 2600+ (kiện tướng)**.
   Bước 200 là mức người chơi cảm nhận được khác biệt; bước 1000 quá thô để luyện tập.
   Lưu ý: rating Lichess cao hơn FIDE ~200–300 điểm ở dải thấp, nên UI ghi rõ "Elo Lichess".
-- [ ] **C2 Dữ liệu cho cả dải cao**
+- [x] **C2 Dữ liệu cho cả dải cao** — 10 dải × 200k vị trí từ Lichess 09/2026 (34.531 ván).
   - Lichess DB: lấy nhiều tháng và **lấy mẫu cân bằng theo dải**, vì ván ≥ 2200 rất ít so với 1500.
   - Dải 2600+: thêm ván OTB của kiện tướng từ Lichess Broadcasts (CC0) và TWIC.
   - Thêm cờ `source` (online/OTB) và nhóm nhịp độ (blitz/rapid/classical) vào dữ liệu.
   - Sửa `encoding.py` (bucket mới), `data.py` (`max_elo`), test `test_encoding.py`.
   Xong khi: `dataset_card.json` có ≥ 200k vị trí cho **mỗi** dải.
+  *Code xong: đọc thẳng URL Lichess (ổ C chỉ còn ~33 GB, không tải nổi file tháng ~30 GB), bỏ qua nước đi của ván
+  bị loại ngay từ tiêu đề, `--per-bucket` để cân bằng 10 dải, config `m2-rtx5060ti.yaml`. Ván OTB và cờ `source`
+  để sau khi xem dải 2600+ có đủ dữ liệu không. Còn: cài Python, chạy test, sinh dữ liệu thật.*
 - [ ] **C3 Huấn luyện và đánh giá M2 nền**: smoke config → config GPU; báo cáo top-1/top-3 theo dải,
   ma trận nội suy Elo, so với baseline Stockfish top-1 và số liệu công bố của Maia.
+  *Run 1 (`m2-rtx5060ti`): top-1 41,4%, top-3 69,1%; báo cáo ở `docs/thesis/m2/m2-rtx5060ti/`.
+  Còn: quá khớp (ít ván, ~58 vị trí/ván) và Elo chỉ góp +0,27 điểm → giới hạn vị trí mỗi ván, đọc nhiều ván hơn,
+  huấn luyện lại; thêm baseline Stockfish top-1.*
+  Xong khi: Elo góp rõ rệt (ma trận nội suy thắng đường chéo ở đa số dải).
 - [ ] **C4 Xuất ONNX và phục vụ trong backend**: ONNX Runtime Java; port `encoding.py` sang Java và test
   khớp từng vector với Python; API `POST /api/human-moves {fen, elo}` → top-k nước và xác suất.
 - [ ] **C5 Đưa vào web**

@@ -195,7 +195,10 @@ def legal_move_mask(board: chess.Board) -> np.ndarray:
 # đưa vào dưới hai dạng bổ trợ nhau: một chỉ số dải (cho embedding học được) và
 # một giá trị liên tục đã chuẩn hóa (cho phép nội suy mượt).
 
-ELO_BUCKET_EDGES = (1100, 1300, 1500, 1700, 1900)
+# Mười dải: <1000, 1000–1199, …, 2400–2599, 2600+ (rating Lichess). Bước 200 khớp với
+# các mức người dùng chọn trên giao diện; dải cuối là trình độ kiện tướng. Bản trước
+# dừng ở 1900+, nên mọi người chơi mạnh hơn bị gộp chung một dải.
+ELO_BUCKET_EDGES = (1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600)
 NUM_ELO_BUCKETS = len(ELO_BUCKET_EDGES) + 1
 ELO_CENTER = 1500.0
 ELO_SCALE = 400.0

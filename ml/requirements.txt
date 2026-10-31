@@ -13,6 +13,8 @@ pyarrow==25.0.1
 numpy==2.5.2
 PyYAML==6.0.3
 tqdm==4.67.1
+# Biểu đồ cho báo cáo đồ án (scripts/build_m2_report.py)
+matplotlib==3.11.2
 
 # M1 — phân loại chất lượng nước đi
 pandas==2.2.3

@@ -1,0 +1,45 @@
+# Cấu hình M2 cho RTX 5060 Ti 8 GB (Blackwell) + i5-14400F (16 luồng).
+#
+#   python -m m2.train --config config/m2-rtx5060ti.yaml
+#
+# Dữ liệu: data/m2 do scripts/prepare_m2_data.py sinh ra, khoảng 200k vị trí cho mỗi
+# dải trong 10 dải Elo (~2 triệu vị trí). Mạng ResNet 10 khối × 128 kênh trên bàn
+# 8×8 rất nhẹ so với 8 GB, nên batch 512 với AMP vẫn còn dư VRAM. Nếu báo hết bộ
+# nhớ (CUDA out of memory), giảm batch_size xuống 256.
+
+data_dir: data/m2
+run_dir: runs/m2-rtx5060ti
+
+batch_size: 512
+epochs: 6           # dữ liệu nhỏ hơn bản 5 triệu vị trí nên cần nhiều vòng hơn
+lr: 0.002
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 1500
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 8      # mã hóa bàn cờ chạy trên CPU, song song với GPU
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 1000
+eval_batches: 60
+log_every: 100
+save_every: 2000
+val_rows: 40000
+
+amp: true
+seed: 1337
+max_steps: null
+
+model:
+  channels: 128
+  blocks: 10
+  elo_dim: 64
+  policy_channels: 32
+  value_channels: 16
+  value_head: true
+  dropout: 0.0

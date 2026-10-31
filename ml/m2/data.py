@@ -11,23 +11,32 @@ mọi đặc trưng đều tính lại được mà không phải sinh lại d�
 Tách train/val/test **theo ván**, không theo nước đi: hai vị trí trong cùng một
 ván có tương quan rất mạnh, chia lẫn chúng sẽ khiến kết quả kiểm định bị thổi
 phồng một cách vô hình.
+
+Nguồn có thể là file trên đĩa hoặc URL ``https://…pgn.zst``: một tháng dữ liệu
+Lichess nặng khoảng 30 GB khi nén, nên đọc thẳng qua mạng và dừng khi đủ dữ liệu
+thay vì phải tải và lưu cả file.
 """
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
+import functools
 import hashlib
 import io
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 import chess
 import chess.pgn
 import pyarrow as pa
 import pyarrow.parquet as pq
 import zstandard
+
+from .encoding import NUM_ELO_BUCKETS, elo_to_bucket
 
 LOGGER = logging.getLogger(__name__)
 
@@ -52,11 +61,12 @@ class FilterConfig:
 
     Mặc định bám theo thiết lập của Maia để kết quả so sánh được, trừ
     ``skip_opening_plies`` được đặt cao hơn một chút vì hệ thống đã có sổ khai
-    cuộc ECO riêng xử lý phần lý thuyết.
+    cuộc ECO riêng xử lý phần lý thuyết. Dải Elo mở tới 3200 để có dữ liệu cho dải
+    kiện tướng 2600+.
     """
 
-    min_elo: int = 800
-    max_elo: int = 2600
+    min_elo: int = 600
+    max_elo: int = 3200
     max_elo_gap: int = 300          # loại ván lệch trình độ quá xa
     min_base_seconds: int = 180     # loại bullet: quyết định bị chi phối bởi đồng hồ
     max_base_seconds: int = 10_800  # loại cờ thư tín
@@ -96,18 +106,55 @@ def split_for(game_key: str, val_ratio: float, test_ratio: float) -> str:
     return "train"
 
 
-def iter_games(path: Path) -> Iterator[chess.pgn.Game]:
-    """Đọc tuần tự file .pgn hoặc .pgn.zst mà không nạp hết vào RAM."""
-    if path.suffix == ".zst":
-        with path.open("rb") as raw:
-            reader = zstandard.ZstdDecompressor().stream_reader(raw)
-            stream = io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
-            while (game := chess.pgn.read_game(stream)) is not None:
-                yield game
+def is_url(source: str | Path) -> bool:
+    return str(source).startswith(("http://", "https://"))
+
+
+@contextlib.contextmanager
+def open_pgn(source: str | Path) -> Iterator[io.TextIOBase]:
+    """Mở file hoặc URL ``.pgn`` / ``.pgn.zst`` thành luồng văn bản, giải nén khi đọc."""
+    text = str(source)
+    if is_url(text):
+        raw = urlopen(Request(text, headers={"User-Agent": "chess-analysis-thesis/1.0"}), timeout=120)
     else:
-        with path.open("r", encoding="utf-8", errors="replace") as stream:
-            while (game := chess.pgn.read_game(stream)) is not None:
-                yield game
+        raw = Path(text).open("rb")
+    try:
+        binary = zstandard.ZstdDecompressor().stream_reader(raw) if text.endswith(".zst") else raw
+        yield io.TextIOWrapper(binary, encoding="utf-8", errors="replace")
+    finally:
+        raw.close()
+
+
+class _HeaderFilterBuilder(chess.pgn.GameBuilder):
+    """Dựng ván như bình thường, nhưng bỏ qua phần nước đi nếu tiêu đề không đạt.
+
+    Phần lớn ván Lichess bị loại chỉ nhờ tiêu đề (nhịp độ, Elo), nên bỏ qua việc
+    phân tích hàng chục nước đi của chúng giúp đọc nhanh hơn nhiều lần.
+    """
+
+    def __init__(self, wanted: Callable[[chess.pgn.Headers], bool]):
+        super().__init__()
+        self._wanted = wanted
+
+    def end_headers(self):
+        if not self._wanted(self.game.headers):
+            return chess.pgn.SKIP
+        return None
+
+
+def iter_games(
+    source: str | Path,
+    wanted: Callable[[chess.pgn.Headers], bool] | None = None,
+) -> Iterator[chess.pgn.Game]:
+    """Đọc tuần tự từng ván mà không nạp hết vào RAM.
+
+    Với ``wanted``, ván bị loại vẫn được trả về nhưng không có nước đi nào, để bên
+    gọi vẫn đếm được số ván đã đọc.
+    """
+    visitor = chess.pgn.GameBuilder if wanted is None else functools.partial(_HeaderFilterBuilder, wanted)
+    with open_pgn(source) as stream:
+        while (game := chess.pgn.read_game(stream, Visitor=visitor)) is not None:
+            yield game
 
 
 def accept_game(headers: chess.pgn.Headers, cfg: FilterConfig) -> bool:
@@ -225,57 +272,124 @@ class ShardWriter:
         return dict(self._counts)
 
 
+def reshuffle_split(out_dir: Path, split: str, rows_per_shard: int = 100_000, seed: int = 1337) -> int:
+    """Trộn ngẫu nhiên toàn bộ một split rồi ghi lại thành các shard nhỏ, đều nhau.
+
+    Dữ liệu được ghi theo thứ tự đọc, mà khi cân bằng theo dải Elo thì các dải đông
+    người đầy ngay từ đầu: shard đầu gần như toàn dải giữa, shard cuối gần như toàn
+    dải 2600+. Bộ đệm trộn của DataLoader (vài chục nghìn dòng) không đủ để xóa
+    tương quan đó, và ít shard lớn còn khiến một phần worker không có việc làm. Với
+    quy mô vài triệu vị trí, trộn cả split trong RAM chỉ mất vài giây.
+    """
+    import numpy as np
+
+    directory = out_dir / split
+    shards = sorted(directory.glob("part-*.parquet"))
+    if not shards:
+        return 0
+    table = pa.concat_tables([pq.read_table(shard) for shard in shards])
+    order = np.random.default_rng(seed).permutation(table.num_rows)
+    table = table.take(pa.array(order))
+
+    # Ghi ra thư mục tạm rồi mới thay, để một lần chạy bị ngắt không làm mất dữ liệu.
+    staging = out_dir / f".{split}-shuffled"
+    staging.mkdir(parents=True, exist_ok=True)
+    for index, start in enumerate(range(0, table.num_rows, rows_per_shard)):
+        pq.write_table(table.slice(start, rows_per_shard), staging / f"part-{index:05d}.parquet", compression="zstd")
+    for shard in shards:
+        shard.unlink()
+    for shard in sorted(staging.glob("part-*.parquet")):
+        shard.replace(directory / shard.name)
+    staging.rmdir()
+    LOGGER.info("Đã trộn %s: %d dòng → %d shard", split, table.num_rows, -(-table.num_rows // rows_per_shard))
+    return table.num_rows
+
+
+@dataclasses.dataclass(slots=True)
+class BuildResult:
+    """Kết quả một lần sinh dữ liệu; ``per_bucket[i]`` là số vị trí của dải Elo i."""
+
+    splits: dict[str, int]
+    per_bucket: list[int]
+    games_seen: int
+    games_kept: int
+    stop_reason: str
+
+
 def build_dataset(
-    sources: list[Path],
+    sources: list[str | Path],
     out_dir: Path,
     cfg: FilterConfig,
     max_games: int | None = None,
     max_positions: int | None = None,
+    max_per_bucket: int | None = None,
+    max_games_seen: int | None = None,
     val_ratio: float = 0.02,
     test_ratio: float = 0.02,
     rows_per_shard: int = 500_000,
-    progress_every: int = 20_000,
-) -> dict[str, int]:
-    """Chạy toàn bộ pipeline và trả về số dòng mỗi split."""
+    progress_every: int = 200_000,
+) -> BuildResult:
+    """Chạy toàn bộ pipeline.
+
+    ``max_per_bucket`` giữ dữ liệu cân bằng giữa các dải Elo: Lichess có rất nhiều
+    ván ở 1400–1800 nhưng rất ít ở 2400+, nên không giới hạn thì mô hình học gần như
+    chỉ từ dải giữa. Dải nào đủ thì không nhận thêm; khi mọi dải đều đủ thì dừng.
+    """
     writer = ShardWriter(out_dir, rows_per_shard)
+    per_bucket = [0] * NUM_ELO_BUCKETS
     seen_games = kept_games = positions = 0
+
+    def bucket_open(elo: int) -> bool:
+        return max_per_bucket is None or per_bucket[elo_to_bucket(elo)] < max_per_bucket
+
+    def wanted(headers: chess.pgn.Headers) -> bool:
+        if not accept_game(headers, cfg):
+            return False
+        if max_per_bucket is None:
+            return True
+        try:
+            return bucket_open(int(headers["WhiteElo"])) or bucket_open(int(headers["BlackElo"]))
+        except (KeyError, ValueError):
+            return False
+
+    def finish(reason: str) -> BuildResult:
+        splits = writer.close()
+        LOGGER.info(
+            "Hoàn tất (%s): %d ván đọc, %d ván giữ (%.2f%%), %d vị trí — %s",
+            reason, seen_games, kept_games, 100.0 * kept_games / max(seen_games, 1), positions, splits,
+        )
+        return BuildResult(splits, list(per_bucket), seen_games, kept_games, reason)
 
     for source in sources:
         LOGGER.info("Đang đọc %s", source)
-        for game in iter_games(source):
+        for game in iter_games(source, wanted):
             seen_games += 1
             if progress_every and seen_games % progress_every == 0:
-                LOGGER.info(
-                    "%d ván đã đọc · %d ván giữ lại · %d vị trí",
-                    seen_games, kept_games, positions,
-                )
+                LOGGER.info("%d ván đã đọc · %d ván giữ lại · %d vị trí · theo dải: %s",
+                            seen_games, kept_games, positions, per_bucket)
 
-            if not accept_game(game.headers, cfg):
-                continue
             rows = extract_samples(game, cfg)
-            if not rows:
-                continue
+            if rows:
+                split = split_for(rows[0]["game_key"], val_ratio, test_ratio)
+                added = 0
+                for row in rows:
+                    bucket = elo_to_bucket(row["elo"])
+                    if max_per_bucket is not None and per_bucket[bucket] >= max_per_bucket:
+                        continue
+                    writer.add(split, row)
+                    per_bucket[bucket] += 1
+                    added += 1
+                if added:
+                    kept_games += 1
+                    positions += added
 
-            kept_games += 1
-            split = split_for(rows[0]["game_key"], val_ratio, test_ratio)
-            for row in rows:
-                writer.add(split, row)
-            positions += len(rows)
-
+            if max_per_bucket is not None and all(count >= max_per_bucket for count in per_bucket):
+                return finish("mọi dải Elo đã đủ")
             if max_positions and positions >= max_positions:
-                LOGGER.info("Đã đạt giới hạn %d vị trí, dừng.", max_positions)
-                return _finish(writer, seen_games, kept_games, positions)
+                return finish(f"đạt giới hạn {max_positions} vị trí")
             if max_games and kept_games >= max_games:
-                LOGGER.info("Đã đạt giới hạn %d ván, dừng.", max_games)
-                return _finish(writer, seen_games, kept_games, positions)
+                return finish(f"đạt giới hạn {max_games} ván")
+            if max_games_seen and seen_games >= max_games_seen:
+                return finish(f"đã đọc {max_games_seen} ván")
 
-    return _finish(writer, seen_games, kept_games, positions)
-
-
-def _finish(writer: ShardWriter, seen: int, kept: int, positions: int) -> dict[str, int]:
-    counts = writer.close()
-    LOGGER.info(
-        "Hoàn tất: %d ván đọc, %d ván giữ (%.1f%%), %d vị trí — %s",
-        seen, kept, 100.0 * kept / max(seen, 1), positions, counts,
-    )
-    return counts
+    return finish("hết dữ liệu nguồn")
