@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import {
-  CheckCircle2, Eye, Flag, LoaderCircle, LockKeyhole, Puzzle, SkipForward, Target,
+  CalendarClock, CheckCircle2, Eye, Flag, LoaderCircle, LockKeyhole, Puzzle, SkipForward, Target,
   TrendingDown, TrendingUp, XCircle,
 } from "lucide-react";
 
@@ -13,6 +13,7 @@ import { backendRequest } from "@/lib/backend-api";
 import type {
   PuzzleMoveResult, PuzzleRating, PuzzleSession, PuzzleTheme,
 } from "@/lib/domain-types";
+import { describeReview, queryParam } from "@/lib/review";
 
 /** Tên tiếng Việt cho các theme thường gặp của Lichess; theme khác giữ tên gốc. */
 const THEME_LABELS: Record<string, string> = {
@@ -73,6 +74,7 @@ export default function PuzzlesPage() {
   const [theme, setTheme] = useState("");
   const [guestRating, setGuestRating] = useState(1500);
   const [error, setError] = useState("");
+  const [fromReview, setFromReview] = useState(false);
 
   const playerColor = session?.puzzle.playerSide ?? "w";
   const finished = Boolean(session && session.status !== "ACTIVE");
@@ -94,7 +96,8 @@ export default function PuzzlesPage() {
     void backendRequest<PuzzleRating>("/api/puzzles/rating/me").then(setRating).catch(() => setRating(null));
   }, [user]);
 
-  async function start() {
+  /** `puzzleId`: mở đúng puzzle đó (ôn tập theo lịch); bỏ trống thì server chọn theo trình độ. */
+  async function start(puzzleId?: number) {
     setError("");
     setResult(null);
     setArrow(null);
@@ -105,7 +108,7 @@ export default function PuzzlesPage() {
     try {
       const next = await backendRequest<PuzzleSession>("/api/puzzles/sessions", {
         method: "POST",
-        body: JSON.stringify({ theme: theme || null, rating: user ? null : guestRating }),
+        body: JSON.stringify({ theme: theme || null, rating: user ? null : guestRating, puzzleId: puzzleId ?? null }),
       });
       setSession(next);
       // Diễn lại nước đối thủ vừa đi rồi mới tới lượt người giải, như Lichess.
@@ -124,7 +127,8 @@ export default function PuzzlesPage() {
   }
 
   useEffect(() => {
-    void start();
+    setFromReview(queryParam("from") === "review");
+    void start(Number(queryParam("puzzle")) || undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -349,11 +353,17 @@ export default function PuzzlesPage() {
                 {result && !change && user && !session?.rated && (
                   <p className="mt-2 text-xs opacity-80">Bạn đã gặp puzzle này trước đây nên lượt này không tính rating.</p>
                 )}
+                {result?.review && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs opacity-80"><CalendarClock className="size-3.5" /> {describeReview(result.review)}</p>
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {finished ? (
                   <>
+                    {fromReview && (
+                      <a href="/review" className="inline-flex items-center gap-2 rounded-xl bg-[#72cf86] px-4 py-2.5 font-semibold text-[#112016]"><CalendarClock className="size-4" /> Thẻ ôn tiếp theo</a>
+                    )}
                     <button type="button" onClick={() => void start()} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-[#4b7fe8] px-4 py-2.5 font-semibold text-white disabled:opacity-50"><SkipForward className="size-4" /> Puzzle tiếp theo</button>
                     {Boolean(result?.solution?.length) && (
                       <button type="button" onClick={() => void showSolution()} disabled={busy} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 font-semibold disabled:opacity-50"><Eye className="size-4" /> Xem lời giải</button>

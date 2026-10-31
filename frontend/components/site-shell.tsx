@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import {
   Archive,
   BookOpenCheck,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   Home,
@@ -11,6 +12,7 @@ import {
   LogIn,
   Menu,
   Puzzle,
+  Repeat2,
   SearchCheck,
   X,
 } from "lucide-react";
@@ -23,6 +25,8 @@ const navigation = [
   { href: "/analysis", label: "Phân tích", icon: SearchCheck },
   { href: "/archive", label: "Kho ván cờ", icon: Archive, protected: true },
   { href: "/puzzles", label: "Puzzle", icon: Puzzle },
+  { href: "/mistakes", label: "Sai lầm", icon: Repeat2, protected: true },
+  { href: "/review", label: "Ôn tập", icon: CalendarCheck, protected: true },
   { href: "/exercises", label: "Bài tập", icon: BookOpenCheck },
 ];
 

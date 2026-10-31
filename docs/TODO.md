@@ -45,7 +45,11 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   *Code xong: phiên giải phía server (V17 `puzzle_sessions`), trang `/puzzles` (chọn theme, phong cấp, xem lời giải,
   rating ±). Lần đầu gặp puzzle mới tính rating. Còn: chạy thử trên trình duyệt.*
 - [ ] **B4 "Học từ sai lầm"**: sinh puzzle từ `analyzed_moves` nhãn mistake/blunder (thế trước nước sai, lời giải = PV1).
+  *Code xong: `/api/mistakes/*`, trang `/mistakes`, V18 (`mistake_reviews` + sửa `side_to_move` sai với ván bắt đầu
+  từ FEN Đen đi). Đáp án đúng = PV1, PV2 kém ≤ 30 cp, hoặc nước Stockfish xếp best/excellent. Còn: chạy thử.*
 - [ ] **B5 SRS** (SM-2 hoặc FSRS): lịch ôn lại thế cờ đã sai; trang "Ôn tập hôm nay".
+  *Code xong: SM-2 (`review/Sm2`, có test theo đúng công thức gốc), V19 `review_cards`, `/api/reviews/summary`,
+  trang `/review`. Thẻ tự sinh khi giải sai puzzle hoặc trả lời sai ở B4; ôn mở lại đúng trang `/puzzles`, `/mistakes`. Còn: chạy thử.*
 - [ ] **B6 Opening drill tương tác**: người học tự đi dòng lý thuyết, sai thì chặn và giải thích.
 - [ ] **B7 Dashboard học tập**: accuracy theo thời gian, lỗi theo giai đoạn (`phase`), theo theme, rating puzzle.
   Xong khi: người dùng có vòng lặp *chơi → phân tích → luyện đúng lỗi của mình → ôn lại*.

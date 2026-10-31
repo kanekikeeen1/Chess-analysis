@@ -107,6 +107,35 @@ export type PuzzleMoveResult = {
     deviation: number;
     provisional: boolean;
   } | null;
+  review: ReviewOutcome | null;
+};
+
+/** Lịch ôn SM-2 sau một lần làm bài; `newCard` khi lần sai này vừa tạo thẻ ôn. */
+export type ReviewOutcome = {
+  newCard: boolean;
+  intervalDays: number;
+  dueAt: string;
+  repetitions: number;
+};
+
+export type DueCard = {
+  cardId: number;
+  kind: "PUZZLE" | "MISTAKE";
+  itemId: number;
+  title: string;
+  detail: string;
+  dueAt: string;
+  intervalDays: number;
+  repetitions: number;
+  lapses: number;
+};
+
+export type ReviewSummary = {
+  due: number;
+  total: number;
+  learned: number;
+  nextDueAt: string | null;
+  cards: DueCard[];
 };
 
 export type PuzzleRating = {
@@ -119,6 +148,40 @@ export type PuzzleRating = {
 };
 
 export type PuzzleTheme = { theme: string; puzzles: number };
+
+export type GamePhase = "OPENING" | "MIDDLEGAME" | "ENDGAME";
+
+/** Một nước mistake/blunder trong ván đã phân tích của chính người học. */
+export type MistakeItem = {
+  id: number;
+  fen: string;
+  playerSide: "w" | "b";
+  gameId: number;
+  gameTitle: string;
+  moveNumber: number;
+  playedSan: string;
+  playedUci: string;
+  label: "mistake" | "blunder";
+  phase: GamePhase;
+  winPercentLoss: number | null;
+};
+
+export type MistakeAnswer = {
+  correct: boolean;
+  answeredUci: string | null;
+  assessmentKey: string | null;
+  detail: string;
+  bestMove: string;
+  originalUci: string;
+  originalLabel: string;
+  review: ReviewOutcome | null;
+};
+
+export type MistakeSummary = {
+  total: number;
+  fixed: number;
+  groups: Array<{ phase: GamePhase; label: string; total: number; fixed: number }>;
+};
 
 export type BackendEngineVariation = {
   depth: number;
