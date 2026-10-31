@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -41,7 +42,13 @@ public class SecurityConfig {
         return source;
     }
 
+    /**
+     * Chỉ dựng khi chạy như web server. Các tác vụ dòng lệnh như import puzzle chạy
+     * với {@code --spring.main.web-application-type=none}, khi đó Spring Security
+     * không tạo {@link HttpSecurity} và bean này sẽ làm ứng dụng không khởi động được.
+     */
     @Bean
+    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .cors(cors -> {})
@@ -56,6 +63,8 @@ public class SecurityConfig {
                                 "/api/exercises/**",
                                 "/api/analysis",
                                 "/api/analysis/**",
+                                "/api/puzzles",
+                                "/api/puzzles/**",
                                 "/actuator/health",
                                 "/error").permitAll()
                         .anyRequest().denyAll())

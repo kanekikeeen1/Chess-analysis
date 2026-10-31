@@ -154,6 +154,22 @@ Ví dụ phần thân khi lưu:
 
 Không còn endpoint để client tự nộp điểm: lượt làm bài chỉ được ghi vào `exercise_attempts` khi server xác nhận hoàn thành, với điểm `max(40, 100 − 15 × số nước sai)`.
 
+## API puzzle
+
+| Phương thức | Endpoint | Quyền | Nghiệp vụ |
+| --- | --- | --- | --- |
+| `GET` | `/api/puzzles/next?theme=&rating=` | Công khai | Puzzle tiếp theo quanh rating người học (khách dùng `rating`, mặc định 1500); không kèm lời giải |
+| `GET` | `/api/puzzles/rating/me` | Đăng nhập | Rating Glicko-2, RD, độ biến động, số lượt giải |
+| `GET` | `/api/puzzles/themes` | Công khai | Các theme và số puzzle mỗi theme |
+
+Ngân hàng puzzle được nhập một lần từ Lichess Puzzle Database (CC0):
+
+```powershell
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.puzzles.import-file=../ml/data/puzzles/lichess_db_puzzle.csv.zst"
+```
+
+Rating người học dùng Glicko-2 (τ = 0,5, sàn RD = 50, mỗi lượt giải là một kỳ, mỗi ngày nghỉ làm RD tăng). Rating của puzzle giữ nguyên giá trị Lichess vì đã ổn định qua hàng trăm lượt chơi.
+
 ## Bảng dữ liệu
 
 - `user_accounts`: tài khoản và BCrypt hash.
@@ -165,6 +181,8 @@ Không còn endpoint để client tự nộp điểm: lượt làm bài chỉ đ
 - `exercise_positions`: ngân hàng thế tàn cuộc theo mục tiêu.
 - `exercise_sessions`: phiên làm bài tàn cuộc do server giữ trạng thái (nước đã đi, số nước sai, kết quả).
 - `analysis_jobs`: hàng đợi, tiến độ và kết quả Stockfish của PGN/FEN.
+- `puzzles`, `puzzle_themes`: ngân hàng puzzle Lichess đã lọc và kiểm tra luật cờ.
+- `user_puzzle_ratings`, `puzzle_attempts`: rating Glicko-2 của người học và lịch sử từng lượt giải.
 
 ## Cấu hình production
 

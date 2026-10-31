@@ -33,5 +33,19 @@ services:
       mysql:
         condition: service_healthy
 
+  # Giao diện web xem DB khi phát triển: http://localhost:8081
+  phpmyadmin:
+    image: phpmyadmin:5
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: chess_user
+      PMA_PASSWORD: chess_password
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   chess_mysql_data:
