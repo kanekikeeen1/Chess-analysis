@@ -78,6 +78,18 @@ public class PuzzleRatingService {
         return new RatingChange(before, after);
     }
 
+    /**
+     * Ghi lượt giải lại một puzzle đã gặp: vẫn lưu vào lịch sử (cho ôn tập và thống kê)
+     * nhưng không đổi rating. Như Lichess, giải lại một bài đã biết lời giải không nói
+     * lên trình độ.
+     */
+    @Transactional
+    public void recordUnrated(Long userId, Puzzle puzzle, boolean solved) {
+        Glicko2.Rating rating = current(userId).rating();
+        attempts.save(new PuzzleAttempt(userId, puzzle.getId(), solved, rating.rating(), rating.rating(),
+                rating.deviation(), puzzle.getRating(), Instant.now()));
+    }
+
     private static long idleDays(Instant lastUpdate, Instant now) {
         return Math.max(0, Duration.between(lastUpdate, now).toDays());
     }

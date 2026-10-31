@@ -42,6 +42,8 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   *Code xong (`puzzle/rating/Glicko2`, V16, `/api/puzzles/next|rating/me|themes`). Rating puzzle giữ nguyên
   giá trị Lichess (đã ổn định qua hàng trăm lượt chơi), chỉ rating người học được cập nhật. Còn: kiểm tra API thật.*
 - [ ] **B3 Bàn giải puzzle**: kiểm tra từng nước theo lời giải (chấp nhận nước chiếu hết thay thế), gợi ý, hiển thị theme.
+  *Code xong: phiên giải phía server (V17 `puzzle_sessions`), trang `/puzzles` (chọn theme, phong cấp, xem lời giải,
+  rating ±). Lần đầu gặp puzzle mới tính rating. Còn: chạy thử trên trình duyệt.*
 - [ ] **B4 "Học từ sai lầm"**: sinh puzzle từ `analyzed_moves` nhãn mistake/blunder (thế trước nước sai, lời giải = PV1).
 - [ ] **B5 SRS** (SM-2 hoặc FSRS): lịch ôn lại thế cờ đã sai; trang "Ôn tập hôm nay".
 - [ ] **B6 Opening drill tương tác**: người học tự đi dòng lý thuyết, sai thì chặn và giải thích.

@@ -62,6 +62,16 @@ public final class ChessRules {
         return capturable ? target.value().toLowerCase() : "-";
     }
 
+    /**
+     * FEN theo quy ước của chess.js: chỉ ghi ô bắt tốt qua đường khi thực sự bắt được.
+     * Dùng cho mọi FEN server gửi cho frontend, vì frontend nạp FEN bằng chess.js.
+     */
+    public static String chessJsFen(Board board) {
+        String[] fields = board.getFen().split(" ");
+        fields[3] = effectiveEnPassant(board);
+        return String.join(" ", fields);
+    }
+
     /** Một bản sao độc lập của bàn cờ (không mang theo lịch sử lặp nước). */
     public static Board copy(Board board) {
         Board copy = new Board();

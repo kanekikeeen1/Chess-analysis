@@ -24,6 +24,7 @@ import com.chessanalysis.auth.puzzle.entity.Puzzle;
 import com.chessanalysis.auth.puzzle.repository.PuzzleRepository;
 import com.chessanalysis.auth.puzzle.service.PuzzleRatingService;
 import com.chessanalysis.auth.puzzle.service.PuzzleSelectionService;
+import com.chessanalysis.auth.puzzle.service.PuzzleSessionService;
 import com.chessanalysis.auth.service.AuthService;
 import com.chessanalysis.auth.web.SessionCookieReader;
 
@@ -40,6 +41,9 @@ class PuzzleControllerTest {
     private PuzzleRatingService ratings;
 
     @MockitoBean
+    private PuzzleSessionService sessions;
+
+    @MockitoBean
     private PuzzleRepository puzzles;
 
     @MockitoBean
@@ -53,6 +57,7 @@ class PuzzleControllerTest {
         when(puzzle.getRating()).thenReturn(1760);
         when(puzzle.getThemes()).thenReturn("mate mateIn2");
         when(puzzle.getSolution()).thenReturn("a2e6 d7d8 f7f8");
+        when(sessions.targetRating(null, 1800)).thenReturn(1800.0);
         when(selection.next(isNull(), eq(1800.0), eq("fork"))).thenReturn(Optional.of(puzzle));
 
         mvc.perform(get("/api/puzzles/next").param("rating", "1800").param("theme", "fork"))

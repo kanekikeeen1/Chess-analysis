@@ -33,7 +33,7 @@ record PreparedPuzzle(
             Optional<Move> move = ChessRules.findLegal(board, puzzle.moves().get(index));
             if (move.isEmpty()) return Optional.empty();
             board.doMove(move.get());
-            if (index == 0) startFen = normalizedFen(board);
+            if (index == 0) startFen = ChessRules.chessJsFen(board);
         }
 
         String solution = String.join(" ", puzzle.moves().subList(1, puzzle.moves().size()));
@@ -41,16 +41,6 @@ record PreparedPuzzle(
         // Nước của người giải nằm ở vị trí 1, 3, 5… trong cột Moves.
         int solutionLength = puzzle.moves().size() / 2;
         return Optional.of(new PreparedPuzzle(puzzle, puzzle.moves().get(0), startFen, solution, solutionLength));
-    }
-
-    /**
-     * FEN theo quy ước của chess.js: chỉ ghi ô bắt tốt qua đường khi thực sự bắt được.
-     * chesslib luôn ghi ô đó, và frontend sẽ nạp chuỗi này bằng chess.js.
-     */
-    private static String normalizedFen(Board board) {
-        String[] fields = board.getFen().split(" ");
-        fields[3] = ChessRules.effectiveEnPassant(board);
-        return String.join(" ", fields);
     }
 
     List<String> themes() {

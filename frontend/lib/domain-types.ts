@@ -68,6 +68,58 @@ export type ExerciseMoveResult = {
   message: string | null;
 };
 
+/** Puzzle gửi cho người giải; server giữ lời giải. */
+export type PuzzleSummary = {
+  id: number;
+  lichessId: string;
+  startFen: string;
+  playerSide: "w" | "b";
+  rating: number;
+  themes: string[];
+  solutionLength: number;
+  gameUrl: string | null;
+};
+
+export type PuzzleSession = {
+  sessionId: string;
+  puzzle: PuzzleSummary;
+  /** Vị trí trước nước dàn dựng của đối thủ; giao diện diễn lại `setupMove` như Lichess. */
+  sourceFen: string;
+  setupMove: string;
+  currentFen: string;
+  status: "ACTIVE" | "SOLVED" | "FAILED";
+  progress: number;
+  rated: boolean;
+};
+
+export type PuzzleMoveResult = {
+  session: PuzzleSession;
+  correct: boolean;
+  playedUci: string | null;
+  opponentReply: string | null;
+  expectedMove: string | null;
+  /** Phần lời giải còn lại khi lượt giải kết thúc (để xem lại). */
+  solution: string[] | null;
+  ratingChange: {
+    before: number;
+    after: number;
+    delta: number;
+    deviation: number;
+    provisional: boolean;
+  } | null;
+};
+
+export type PuzzleRating = {
+  rating: number;
+  deviation: number;
+  volatility: number;
+  provisional: boolean;
+  attempts: number;
+  solved: number;
+};
+
+export type PuzzleTheme = { theme: string; puzzles: number };
+
 export type BackendEngineVariation = {
   depth: number;
   mate: number | null;

@@ -6,6 +6,7 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.validation.FieldError;
@@ -47,6 +48,13 @@ public class ApiExceptionHandler {
         }
         return ResponseEntity.badRequest()
                 .body(new ApiError("Dữ liệu gửi lên chưa hợp lệ.", fields, Instant.now()));
+    }
+
+    /** Hai request sửa cùng một phiên (bấm hai lần): request sau thua ở bước kiểm tra @Version. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    ResponseEntity<ApiError> handleConcurrentUpdate(ObjectOptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError("Nước trước vẫn đang được xử lý. Hãy thử lại."));
     }
 
     /** Tham số query/path sai kiểu hoặc vi phạm ràng buộc (ví dụ {@code ?rating=abc}): lỗi của client. */

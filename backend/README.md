@@ -159,6 +159,9 @@ Không còn endpoint để client tự nộp điểm: lượt làm bài chỉ đ
 | Phương thức | Endpoint | Quyền | Nghiệp vụ |
 | --- | --- | --- | --- |
 | `GET` | `/api/puzzles/next?theme=&rating=` | Công khai | Puzzle tiếp theo quanh rating người học (khách dùng `rating`, mặc định 1500); không kèm lời giải |
+| `POST` | `/api/puzzles/sessions` | Công khai | Bắt đầu giải một puzzle `{"theme"?, "rating"?}`; trả vị trí, nước dàn dựng, không kèm lời giải |
+| `POST` | `/api/puzzles/sessions/{id}/moves` | Chủ phiên | Đi một nước `{"uci"}`; server so với lời giải (chiếu hết khác vẫn đúng), đi nước đáp, cập nhật rating khi kết thúc |
+| `POST` | `/api/puzzles/sessions/{id}/give-up` | Chủ phiên | Bỏ cuộc, nhận lời giải; tính là giải sai |
 | `GET` | `/api/puzzles/rating/me` | Đăng nhập | Rating Glicko-2, RD, độ biến động, số lượt giải |
 | `GET` | `/api/puzzles/themes` | Công khai | Các theme và số puzzle mỗi theme |
 
