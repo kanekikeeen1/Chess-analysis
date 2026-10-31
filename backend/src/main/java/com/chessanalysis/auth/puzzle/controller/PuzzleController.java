@@ -83,9 +83,9 @@ public class PuzzleController {
     public ResponseEntity<PuzzleSessionResponse> start(
             @Valid @RequestBody(required = false) StartPuzzleRequest body,
             HttpServletRequest request) {
-        StartPuzzleRequest options = body == null ? new StartPuzzleRequest(null, null) : body;
+        StartPuzzleRequest options = body == null ? new StartPuzzleRequest(null, null, null) : body;
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(sessions.start(cookies.read(request), options.theme(), options.rating()));
+                .body(sessions.start(cookies.read(request), options.theme(), options.rating(), options.puzzleId()));
     }
 
     @PostMapping("/sessions/{sessionId}/moves")

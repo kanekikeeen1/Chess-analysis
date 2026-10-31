@@ -19,6 +19,9 @@ import com.chessanalysis.auth.puzzle.entity.PuzzleSession;
 import com.chessanalysis.auth.puzzle.repository.PuzzleAttemptRepository;
 import com.chessanalysis.auth.puzzle.repository.PuzzleRepository;
 import com.chessanalysis.auth.puzzle.repository.PuzzleSessionRepository;
+import com.chessanalysis.auth.review.ReviewCard;
+import com.chessanalysis.auth.review.ReviewService;
+import com.chessanalysis.auth.review.dto.ReviewOutcome;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
 import com.github.bhlangonijr.chesslib.Board;
@@ -39,6 +42,7 @@ public class PuzzleSessionService {
     private final PuzzleAttemptRepository attempts;
     private final PuzzleSelectionService selection;
     private final PuzzleRatingService ratings;
+    private final ReviewService reviews;
     private final AuthService authService;
 
     public PuzzleSessionService(
@@ -47,12 +51,14 @@ public class PuzzleSessionService {
             PuzzleAttemptRepository attempts,
             PuzzleSelectionService selection,
             PuzzleRatingService ratings,
+            ReviewService reviews,
             AuthService authService) {
         this.sessions = sessions;
         this.puzzles = puzzles;
         this.attempts = attempts;
         this.selection = selection;
         this.ratings = ratings;
+        this.reviews = reviews;
         this.authService = authService;
     }
 
@@ -63,10 +69,13 @@ public class PuzzleSessionService {
     }
 
     @Transactional
-    public PuzzleSessionResponse start(String token, String theme, Integer requestedRating) {
+    public PuzzleSessionResponse start(String token, String theme, Integer requestedRating, Long puzzleId) {
         UserAccount user = authService.currentAccountOrNull(token);
         Long userId = user == null ? null : user.getId();
-        Puzzle puzzle = selection.next(userId, targetRating(userId, requestedRating), theme)
+        // puzzleId: ôn đúng một puzzle (từ trang "Ôn tập hôm nay"), không chọn theo trình độ.
+        Puzzle puzzle = (puzzleId != null
+                ? puzzles.findById(puzzleId)
+                : selection.next(userId, targetRating(userId, requestedRating), theme))
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
                         "Không có puzzle phù hợp. Đã import ngân hàng puzzle chưa?"));
         boolean rated = userId != null && !attempts.existsByUserIdAndPuzzleId(userId, puzzle.getId());
@@ -95,7 +104,7 @@ public class PuzzleSessionService {
             return new PuzzleMoveResponse(
                     toResponse(session, puzzle, ChessRules.chessJsFen(board)), false, move.toString(), null,
                     expected, solution.subList(session.getProgress(), solution.size()),
-                    recordResult(session, puzzle, false));
+                    recordResult(session, puzzle, false), scheduleReview(session, false));
         }
 
         int progress = session.getProgress() + 1;
@@ -110,13 +119,15 @@ public class PuzzleSessionService {
 
         boolean solved = mated || progress >= solution.size();
         PuzzleMoveResponse.RatingChange change = null;
+        ReviewOutcome review = null;
         if (solved) {
             session.finish(PuzzleSession.SOLVED, now);
             change = recordResult(session, puzzle, true);
+            review = scheduleReview(session, true);
         }
         return new PuzzleMoveResponse(
                 toResponse(session, puzzle, ChessRules.chessJsFen(board)), true, move.toString(), reply,
-                null, solved ? List.of() : null, change);
+                null, solved ? List.of() : null, change, review);
     }
 
     @Transactional
@@ -129,7 +140,13 @@ public class PuzzleSessionService {
         return new PuzzleMoveResponse(
                 toResponse(session, puzzle, ChessRules.chessJsFen(board)), false, null, null,
                 solution.get(session.getProgress()), solution.subList(session.getProgress(), solution.size()),
-                recordResult(session, puzzle, false));
+                recordResult(session, puzzle, false), scheduleReview(session, false));
+    }
+
+    /** Puzzle giải sai trở thành thẻ ôn tập; puzzle đã có thẻ được cập nhật lịch theo SM-2. */
+    private ReviewOutcome scheduleReview(PuzzleSession session, boolean solved) {
+        if (session.getUserId() == null) return null;
+        return reviews.record(session.getUserId(), ReviewCard.PUZZLE, session.getPuzzleId(), solved);
     }
 
     private PuzzleMoveResponse.RatingChange recordResult(PuzzleSession session, Puzzle puzzle, boolean solved) {

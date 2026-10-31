@@ -31,6 +31,7 @@ import com.chessanalysis.auth.puzzle.rating.Glicko2;
 import com.chessanalysis.auth.puzzle.repository.PuzzleAttemptRepository;
 import com.chessanalysis.auth.puzzle.repository.PuzzleRepository;
 import com.chessanalysis.auth.puzzle.repository.PuzzleSessionRepository;
+import com.chessanalysis.auth.review.ReviewService;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
 import com.github.bhlangonijr.chesslib.Board;
@@ -50,7 +51,7 @@ class PuzzleSessionServiceTest {
     @BeforeEach
     void setUp() {
         service = new PuzzleSessionService(sessions, puzzles, mock(PuzzleAttemptRepository.class),
-                mock(PuzzleSelectionService.class), ratings, authService);
+                mock(PuzzleSelectionService.class), ratings, mock(ReviewService.class), authService);
         UserAccount user = mock(UserAccount.class);
         when(user.getId()).thenReturn(7L);
         when(authService.currentAccountOrNull("token")).thenReturn(user);

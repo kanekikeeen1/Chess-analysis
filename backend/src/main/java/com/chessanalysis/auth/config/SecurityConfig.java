@@ -65,6 +65,8 @@ public class SecurityConfig {
                                 "/api/analysis/**",
                                 "/api/puzzles",
                                 "/api/puzzles/**",
+                                "/api/mistakes/**",
+                                "/api/reviews/**",
                                 "/actuator/health",
                                 "/error").permitAll()
                         .anyRequest().denyAll())

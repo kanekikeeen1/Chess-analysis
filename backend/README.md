@@ -171,6 +171,26 @@ Ngân hàng puzzle được nhập một lần từ Lichess Puzzle Database (CC0
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.main.web-application-type=none --app.puzzles.import-file=../ml/data/puzzles/lichess_db_puzzle.csv.zst"
 ```
 
+## API học từ sai lầm (cần đăng nhập)
+
+| Phương thức | Endpoint | Nghiệp vụ |
+| --- | --- | --- |
+| `GET` | `/api/mistakes/summary` | Số mistake/blunder theo giai đoạn ván, và số đã sửa đúng |
+| `GET` | `/api/mistakes/next?phase=` | Sai lầm nên ôn tiếp theo (chưa sửa được và lâu chưa ôn trước); không kèm đáp án |
+| `POST` | `/api/mistakes/{id}/answer` | Trả lời `{"uci"}`; đúng nếu là PV1, PV2 kém ≤ 30 cp, hoặc được Stockfish xếp best/excellent |
+| `POST` | `/api/mistakes/{id}/reveal` | Xem đáp án (ghi là chưa sửa được) |
+
+## API ôn tập ngắt quãng (cần đăng nhập)
+
+| Phương thức | Endpoint | Nghiệp vụ |
+| --- | --- | --- |
+| `GET` | `/api/reviews/summary` | Số thẻ đến hạn, tổng số, số đã thuộc (khoảng cách ≥ 21 ngày), lần đến hạn kế tiếp, danh sách thẻ cần ôn |
+| `GET` | `/api/mistakes/{id}` | Mở đúng một sai lầm (dùng khi ôn thẻ loại MISTAKE) |
+
+Thẻ (`review_cards`) không do người dùng tự thêm: giải sai một puzzle, hoặc trả lời sai / xem đáp án ở "Học từ sai lầm", tạo thẻ đến hạn sau 1 ngày. Mỗi lần làm lại bài có thẻ cập nhật lịch theo SM-2 (EF ban đầu 2,5; khoảng cách 1 → 6 → I × EF; sai thì về 1 ngày). Ôn thẻ puzzle dùng `POST /api/puzzles/sessions {"puzzleId": …}`.
+
+Nguồn dữ liệu là bảng `analyzed_moves`, được ghi khi lưu một ván đã chạy Game Review backend. Nếu tên tài khoản trùng tên kỳ thủ Trắng/Đen của ván, chỉ nước của bên đó được tính.
+
 Rating người học dùng Glicko-2 (τ = 0,5, sàn RD = 50, mỗi lượt giải là một kỳ, mỗi ngày nghỉ làm RD tăng). Rating của puzzle giữ nguyên giá trị Lichess vì đã ổn định qua hàng trăm lượt chơi.
 
 ## Bảng dữ liệu

@@ -144,8 +144,11 @@ public class AnalyzedMove {
         this.gameId = gameId;
         this.userId = userId;
         this.ply = ply;
-        this.moveNumber = (ply + 1) / 2;
-        this.sideToMove = ply % 2 == 1 ? "w" : "b";
+        // Lấy từ FEN chứ không suy từ thứ tự nước: ván bắt đầu từ một FEN Đen đi trước
+        // sẽ bị gán ngược bên nếu giả định Trắng luôn đi nước đầu.
+        String[] fen = beforeFen.trim().split("\\s+");
+        this.sideToMove = fen.length > 1 && fen[1].equals("b") ? "b" : "w";
+        this.moveNumber = fen.length > 5 ? Integer.parseInt(fen[5]) : (ply + 1) / 2;
         this.phase = "MIDDLEGAME";
         this.san = san;
         this.uci = uci;
