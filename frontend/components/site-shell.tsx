@@ -10,6 +10,7 @@ import {
   LockKeyhole,
   LogIn,
   Menu,
+  Puzzle,
   SearchCheck,
   X,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navigation = [
   { href: "/", label: "Trang chủ", icon: Home },
   { href: "/analysis", label: "Phân tích", icon: SearchCheck },
   { href: "/archive", label: "Kho ván cờ", icon: Archive, protected: true },
+  { href: "/puzzles", label: "Puzzle", icon: Puzzle },
   { href: "/exercises", label: "Bài tập", icon: BookOpenCheck },
 ];
 
