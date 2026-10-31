@@ -41,6 +41,9 @@ public class EngineAnalysisService {
         private Session() {}
 
         public PositionEvaluationResponse analyze(String fen, int depth, int positionIndex) {
+            // Kiểm tra trước khi mượn engine: FEN hỏng không được làm hủy một
+            // tiến trình Stockfish đang khỏe (runEngine discard lease khi có lỗi).
+            FenRules.requireValid(fen);
             return cache.lookup(fen, depth, positionIndex)
                     .map(hit -> {
                         cacheHits++;

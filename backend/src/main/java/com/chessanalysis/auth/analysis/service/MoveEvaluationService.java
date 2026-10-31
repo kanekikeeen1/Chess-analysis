@@ -5,10 +5,15 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import com.chessanalysis.auth.analysis.dto.EngineVariationResponse;
-import com.chessanalysis.auth.analysis.dto.EvaluateMoveRequest;
 import com.chessanalysis.auth.analysis.dto.EvaluateMoveResponse;
 import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
 
+/**
+ * Chấm một nước đi đơn lẻ bằng Stockfish (dùng cho bài tàn cuộc).
+ *
+ * <p>Mọi tham số đều do server tạo ra: FEN trước/sau và cờ chiếu hết được tính bằng
+ * luật cờ phía server trong {@code ExerciseSessionService}, không lấy từ trình duyệt.
+ */
 @Service
 public class MoveEvaluationService {
     private final EngineAnalysisService engineAnalysis;
@@ -19,33 +24,26 @@ public class MoveEvaluationService {
         this.classifier = classifier;
     }
 
-    public EvaluateMoveResponse evaluate(EvaluateMoveRequest request) {
-        int depth = request.depth() == null ? 18 : Math.max(16, Math.min(20, request.depth()));
+    public EvaluateMoveResponse evaluate(String beforeFen, String afterFen, String playedUci, boolean checkmate, int depth) {
         try (EngineAnalysisService.Session session = engineAnalysis.openSession()) {
-            PositionEvaluationResponse before = session.analyze(request.beforeFen(), depth, 0);
-            boolean whiteMoved = request.beforeFen().split("\\s+")[1].equals("w");
+            PositionEvaluationResponse before = session.analyze(beforeFen, depth, 0);
+            boolean whiteMoved = FenNormalizer.whiteToMove(beforeFen);
             PositionEvaluationResponse after;
-            if (request.checkmate()) {
+            if (checkmate) {
                 double winningScore = whiteMoved ? 100.0 : -100.0;
                 int mate = whiteMoved ? 1 : -1;
-                EngineVariationResponse terminal = new EngineVariationResponse(
-                        depth, mate, List.of(), winningScore);
-                after = new PositionEvaluationResponse(
-                        1, request.afterFen(), depth, mate, List.of(), winningScore, List.of(terminal));
+                EngineVariationResponse terminal = new EngineVariationResponse(depth, mate, List.of(), winningScore);
+                after = new PositionEvaluationResponse(1, afterFen, depth, mate, List.of(), winningScore, List.of(terminal));
             } else {
-                after = session.analyze(request.afterFen(), depth, 1);
+                after = session.analyze(afterFen, depth, 1);
             }
             String bestMove = before.moves().isEmpty() ? null : before.moves().get(0);
             String opponentReply = after.moves().isEmpty() ? null : after.moves().get(0);
-            boolean isBest = bestMove != null && normalize(bestMove).equals(normalize(request.playedUci()));
+            boolean isBest = bestMove != null && bestMove.equals(playedUci);
             double loss = classifier.loss(before.pawns(), after.pawns(), whiteMoved);
-            String key = request.checkmate()
-                    ? "best"
-                    : classifier.simpleAssessment(before.pawns(), after.pawns(), whiteMoved, isBest);
+            String key = checkmate ? "best" : classifier.simpleAssessment(before.pawns(), after.pawns(), whiteMoved, isBest);
             String detail = switch (key) {
-                case "best" -> request.checkmate()
-                        ? "Nước chiếu hết và hoàn thành bài tàn cuộc"
-                        : "Nước đi tốt nhất theo Stockfish";
+                case "best" -> checkmate ? "Nước chiếu hết và hoàn thành bài tàn cuộc" : "Nước đi tốt nhất theo Stockfish";
                 case "excellent" -> "Rất sát với nước tốt nhất";
                 case "okay" -> "Nước đi chấp nhận được";
                 case "inaccuracy" -> "Chưa chính xác; hãy thử gợi ý của Stockfish";
@@ -54,9 +52,5 @@ public class MoveEvaluationService {
             };
             return new EvaluateMoveResponse(key, detail, loss, bestMove, opponentReply, before, after);
         }
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase();
     }
 }

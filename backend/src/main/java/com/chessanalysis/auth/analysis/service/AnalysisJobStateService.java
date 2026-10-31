@@ -17,6 +17,11 @@ public class AnalysisJobStateService {
     }
 
     @Transactional
+    public void requeue(Long id) {
+        find(id).requeue(Instant.now());
+    }
+
+    @Transactional
     public void markRunning(Long id) {
         find(id).markRunning(Instant.now());
     }

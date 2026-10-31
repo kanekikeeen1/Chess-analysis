@@ -40,12 +40,14 @@ export type StockfishReviewPlan = {
   total: number;
 };
 
-// The ASM worker is a little larger than the WASM loader, but it is completely
-// self-contained. On authenticated deployments the secondary WASM request can
-// be blocked before Stockfish emits `uciok`, leaving the UI at 0.0 forever.
-// This build avoids that extra request while keeping Stockfish 18 off the UI
-// thread and working consistently across Chrome, Edge, Firefox and Safari.
-const ENGINE_PATH = "/stockfish/stockfish-18-asm.js";
+// The WASM build (NNUE "lite", single-threaded) searches several times faster
+// than the asm.js build. Its loader fetches `stockfish-18-lite-single.wasm` as a
+// second request; if that request is blocked or WebAssembly is unavailable, the
+// engine never emits `readyok`, so we fall back to the self-contained asm.js
+// worker instead of leaving the UI stuck at 0.0.
+const WASM_ENGINE_PATH = "/stockfish/stockfish-18-lite-single.js";
+const ASM_ENGINE_PATH = "/stockfish/stockfish-18-asm.js";
+const ENGINE_STARTUP_TIMEOUT_MS = 15_000;
 
 export const INTERACTIVE_DEPTH = 16;
 const BACKGROUND_DEPTH = 16;
@@ -69,7 +71,9 @@ function scoreFromInfo(line: string, fen: string): StockfishVariation | null {
         depth: Number(depthMatch?.[1] ?? 0),
         mate: whiteScore,
         moves: pvMatch?.[1].trim().split(/\s+/) ?? [],
-        pawns: whiteScore >= 0 ? 100 : -100,
+        // `mate 0`: the side to move is already checkmated, so the sign comes
+        // from whose turn it is rather than from the (unsigned) zero.
+        pawns: rawScore === 0 ? (whiteToMove ? -100 : 100) : whiteScore > 0 ? 100 : -100,
       }
     : {
         depth: Number(depthMatch?.[1] ?? 0),
@@ -121,21 +125,35 @@ export function useStockfish(
   const runNextRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
-    let worker: Worker;
+    let worker: Worker | null = null;
     let startupTimer: number | undefined;
+    let triedFallback = false;
 
-    try {
-      worker = new Worker(ENGINE_PATH);
+    function startWorker(path: string) {
+      try {
+        worker = new Worker(path);
+      } catch {
+        return false;
+      }
       workerRef.current = worker;
-      startupTimer = window.setTimeout(() => {
-        if (readyRef.current) return;
-        setEngineError(true);
-        worker.terminate();
-        workerRef.current = null;
-      }, 15_000);
-    } catch {
+      worker.onmessage = handleMessage;
+      worker.onerror = handleError;
+      startupTimer = window.setTimeout(handleStartupFailure, ENGINE_STARTUP_TIMEOUT_MS);
+      worker.postMessage("uci");
+      return true;
+    }
+
+    function handleStartupFailure() {
+      if (readyRef.current) return;
+      if (startupTimer) window.clearTimeout(startupTimer);
+      worker?.terminate();
+      worker = null;
+      workerRef.current = null;
+      if (!triedFallback) {
+        triedFallback = true;
+        if (startWorker(ASM_ENGINE_PATH)) return;
+      }
       setEngineError(true);
-      return;
     }
 
     function nextTask(): Omit<AnalysisTask, "cancelled"> | null {
@@ -221,16 +239,16 @@ export function useStockfish(
 
     runNextRef.current = runNext;
 
-    worker.onmessage = (event: MessageEvent<unknown>) => {
+    function handleMessage(event: MessageEvent<unknown>) {
       if (typeof event.data !== "string") return;
       const line = event.data.trim();
 
       if (line === "uciok") {
         // A smaller hash starts much more reliably on phones and constrained
         // browser tabs; 128 MB could make the worker stall before its first PV.
-        worker.postMessage("setoption name Hash value 32");
-        worker.postMessage("setoption name MultiPV value 2");
-        worker.postMessage("isready");
+        worker?.postMessage("setoption name Hash value 32");
+        worker?.postMessage("setoption name MultiPV value 2");
+        worker?.postMessage("isready");
         return;
       }
 
@@ -316,24 +334,30 @@ export function useStockfish(
         }
         runNext();
       }
-    };
+    }
 
-    worker.onerror = () => {
-      if (startupTimer) window.clearTimeout(startupTimer);
+    function handleError() {
+      // Before `readyok` an error usually means the WASM binary failed to load.
+      if (!readyRef.current) {
+        handleStartupFailure();
+        return;
+      }
       setEngineError(true);
       activeTaskRef.current = null;
       pendingCurrentFenRef.current = null;
       backgroundQueueRef.current = [];
       reviewQueueRef.current = [];
       setActiveAnalysis(null);
-    };
+    }
 
-    worker.postMessage("uci");
+    const wasmSupported = typeof WebAssembly === "object";
+    triedFallback = !wasmSupported;
+    if (!startWorker(wasmSupported ? WASM_ENGINE_PATH : ASM_ENGINE_PATH)) handleStartupFailure();
 
     return () => {
       if (startupTimer) window.clearTimeout(startupTimer);
-      worker.postMessage("quit");
-      worker.terminate();
+      worker?.postMessage("quit");
+      worker?.terminate();
       workerRef.current = null;
       readyRef.current = false;
     };

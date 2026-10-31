@@ -19,6 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Service
 public class AnalysisWorker {
     private static final Logger LOGGER = LoggerFactory.getLogger(AnalysisWorker.class);
+    private static final int OPENING_MIN_POSITIONS = 12;
+    private static final int ENDGAME_MAX_PIECES = 14;
 
     private final EngineAnalysisService engineAnalysis;
     private final AnalysisClassifier classifier;
@@ -44,11 +46,12 @@ public class AnalysisWorker {
     public void process(Long jobId, CreateAnalysisJobRequest request) {
         state.markRunning(jobId);
         List<PositionEvaluationResponse> evaluations = new ArrayList<>();
+        int openingEnd = openingEnd(request);
 
         try (EngineAnalysisService.Session session = engineAnalysis.openSession()) {
             for (int index = 0; index < request.positions().size(); index++) {
                 String fen = request.positions().get(index);
-                int depth = targetDepth(request, index, fen);
+                int depth = targetDepth(request, index, fen, openingEnd);
                 AnalysisMoveRequest previousMove = index > 0
                         ? request.moves().get(index - 1)
                         : null;
@@ -76,10 +79,11 @@ public class AnalysisWorker {
             List<MoveReviewResponse> reviewedMoves = request.moves().isEmpty()
                     ? List.of()
                     : classifier.classify(request.moves(), evaluations);
-            Double whiteAccuracy = averageAccuracy(reviewedMoves, true);
-            Double blackAccuracy = averageAccuracy(reviewedMoves, false);
+            EvaluationMath.GameAccuracy accuracy = EvaluationMath.gameAccuracy(
+                    evaluations.stream().map(PositionEvaluationResponse::pawns).toList(),
+                    FenNormalizer.whiteToMove(request.positions().get(0)));
             AnalysisResultResponse result = new AnalysisResultResponse(
-                    List.copyOf(evaluations), reviewedMoves, whiteAccuracy, blackAccuracy,
+                    List.copyOf(evaluations), reviewedMoves, accuracy.white(), accuracy.black(),
                     averageDepth(evaluations));
             state.complete(jobId, json(result));
             LOGGER.info("Tác vụ {} xong: {} vị trí, {} lấy từ cache, {} lần chạy engine",
@@ -90,36 +94,36 @@ public class AnalysisWorker {
         }
     }
 
-    private int targetDepth(CreateAnalysisJobRequest request, int positionIndex, String fen) {
+    /**
+     * Depth theo giai đoạn ván: khai cuộc → mức thấp, trung cuộc → mức giữa, tàn
+     * cuộc → mức cao. Mỗi nước được chấm bằng hiệu đánh giá giữa hai vị trí liền
+     * nhau, nên hai vị trí đó cần cùng depth; nếu không, chênh lệch do depth khác
+     * nhau bị tính nhầm thành lỗi của người chơi. Bản trước tăng depth ngay sau
+     * mỗi nước bắt quân/chiếu, khiến depth nhảy lên xuống liên tục giữa trung cuộc.
+     * Ở đây cả ba điều kiện đều đơn điệu theo thời gian (vị trí tăng dần, số quân
+     * chỉ giảm), nên depth chỉ đổi tối đa hai lần trong một ván.
+     */
+    private int targetDepth(CreateAnalysisJobRequest request, int positionIndex, String fen, int openingEnd) {
         int minDepth = request.minDepth();
         int maxDepth = request.maxDepth();
         if (request.sourceType().equals("FEN")) return maxDepth;
-        AnalysisMoveRequest previous = positionIndex > 0 && positionIndex - 1 < request.moves().size()
-                ? request.moves().get(positionIndex - 1) : null;
-        AnalysisMoveRequest next = positionIndex < request.moves().size()
-                ? request.moves().get(positionIndex) : null;
-        boolean theory = previous != null && previous.theory() || next != null && next.theory();
-        if (positionIndex <= 12 || theory) return minDepth;
-
-        long pieces = fen.substring(0, fen.indexOf(' ')).chars()
-                .filter(character -> "prnbqkPRNBQK".indexOf(character) >= 0)
-                .count();
-        if (pieces <= 14) return maxDepth;
-        if (previous != null && (previous.capture() || previous.check() || previous.promotion())) {
-            return Math.max(minDepth, maxDepth - 1);
-        }
-        if (positionIndex >= 30) return Math.max(minDepth, maxDepth - 1);
-        return Math.min(maxDepth, minDepth + Math.max(1, (maxDepth - minDepth) / 2));
+        if (FenNormalizer.pieceCount(fen) <= ENDGAME_MAX_PIECES) return maxDepth;
+        if (positionIndex <= openingEnd) return minDepth;
+        return minDepth + (maxDepth - minDepth) / 2;
     }
 
-    private Double averageAccuracy(List<MoveReviewResponse> moves, boolean white) {
-        return moves.stream()
-                .filter(move -> ((move.index() - 1) % 2 == 0) == white)
-                .map(MoveReviewResponse::accuracy)
-                .filter(value -> value != null)
-                .mapToDouble(Double::doubleValue)
-                .average()
-                .stream().boxed().findFirst().orElse(null);
+    /**
+     * Vị trí cuối cùng còn thuộc khai cuộc: ít nhất 12 nửa nước đầu, kéo dài thêm
+     * nếu chuỗi nước lý thuyết liên tục từ đầu ván dài hơn. Chỉ tính phần lý
+     * thuyết liền mạch để một lần chuyển hóa về thế trong sách ở giữa ván không
+     * kéo depth ngược trở xuống.
+     */
+    private int openingEnd(CreateAnalysisJobRequest request) {
+        int leadingTheory = 0;
+        while (leadingTheory < request.moves().size() && request.moves().get(leadingTheory).theory()) {
+            leadingTheory++;
+        }
+        return Math.max(OPENING_MIN_POSITIONS, leadingTheory);
     }
 
     private Double averageDepth(List<PositionEvaluationResponse> evaluations) {

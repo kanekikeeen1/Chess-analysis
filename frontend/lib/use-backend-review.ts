@@ -30,10 +30,22 @@ export function useBackendReview({
     setError("");
     if (!enabled || !payloadRef.current) return;
 
+    // Backend chỉ gửi các đánh giá mới từ `from`; ghép chúng vào phần đã nhận
+    // để `job.result.evaluations` luôn là danh sách đầy đủ cho phần còn lại của UI.
+    let received: NonNullable<BackendAnalysisJob["result"]>["evaluations"] = [];
+
+    function merge(next: BackendAnalysisJob): BackendAnalysisJob {
+      if (!next.result) return next;
+      received = [...received.slice(0, next.evaluationsFrom), ...next.result.evaluations];
+      return { ...next, result: { ...next.result, evaluations: received } };
+    }
+
     async function poll(publicId: string) {
       if (cancelled) return;
       try {
-        const next = await backendRequest<BackendAnalysisJob>(`/api/analysis/jobs/${publicId}`);
+        const next = merge(await backendRequest<BackendAnalysisJob>(
+          `/api/analysis/jobs/${publicId}?from=${received.length}`,
+        ));
         if (cancelled) return;
         setJob(next);
         if (next.status === "COMPLETED") return;
@@ -55,7 +67,7 @@ export function useBackendReview({
     })
       .then((created) => {
         if (cancelled) return;
-        setJob(created);
+        setJob(merge(created));
         void poll(created.publicId);
       })
       .catch((caughtError) => {

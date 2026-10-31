@@ -50,6 +50,11 @@ public class GameArchiveService {
     public GameDetailResponse save(String token, SaveGameRequest request) {
         UserAccount user = authService.requireCurrentAccount(token);
         String pgn = request.pgn() == null || request.pgn().isBlank() ? null : request.pgn().trim();
+        // Ván có Game Review backend: accuracy lấy từ kết quả job, không lấy số client gửi.
+        // Ván phân tích tay (không có job) vẫn dùng số client nhận từ /api/analysis/classify.
+        CompletedJob job = ownedCompletedJob(request.analysisJobId(), user.getId());
+        Double whiteAccuracy = job == null ? request.whiteAccuracy() : job.result().whiteAccuracy();
+        Double blackAccuracy = job == null ? request.blackAccuracy() : job.result().blackAccuracy();
         AnalyzedGame game = new AnalyzedGame(
                 user,
                 request.title().trim(),
@@ -62,15 +67,34 @@ public class GameArchiveService {
                 request.finalFen().trim(),
                 trimToNull(request.openingEco()),
                 trimToNull(request.openingName()),
-                roundAccuracy(request.whiteAccuracy()),
-                roundAccuracy(request.blackAccuracy()),
+                roundAccuracy(whiteAccuracy),
+                roundAccuracy(blackAccuracy),
                 request.depth(),
                 request.moveCount(),
                 request.analysisJson(),
                 Instant.now());
         AnalyzedGame saved = games.saveAndFlush(game);
-        indexMoves(saved, user.getId(), request.analysisJobId());
+        if (job != null) indexMoves(saved, user.getId(), job);
         return toDetail(saved);
+    }
+
+    /**
+     * Job review đã hoàn tất và thuộc về đúng người đang lưu ván. Job của người khác
+     * hoặc job khách vãng lai bị bỏ qua, để không ai gắn dữ liệu phân tích của người
+     * khác vào tài khoản (và vào tập dữ liệu analyzed_moves) của mình.
+     */
+    private CompletedJob ownedCompletedJob(String analysisJobId, Long userId) {
+        if (analysisJobId == null || analysisJobId.isBlank()) return null;
+        AnalysisJob job = jobs.findByPublicId(analysisJobId.trim()).orElse(null);
+        if (job == null || !userId.equals(job.getUserId()) || !"COMPLETED".equals(job.getStatus())) return null;
+        try {
+            return new CompletedJob(
+                    objectMapper.readValue(job.getRequestJson(), CreateAnalysisJobRequest.class),
+                    objectMapper.readValue(job.getResultJson(), AnalysisResultResponse.class));
+        } catch (Exception exception) {
+            LOGGER.warn("Không đọc được kết quả tác vụ {}", job.getId(), exception);
+            return null;
+        }
     }
 
     /**
@@ -78,21 +102,16 @@ public class GameArchiveService {
      * làm hỏng việc lưu ván: người dùng vẫn phải có báo cáo của mình, dữ liệu
      * cho phần học máy chỉ là phần thêm.
      */
-    private void indexMoves(AnalyzedGame game, Long userId, String analysisJobId) {
-        if (analysisJobId == null || analysisJobId.isBlank()) return;
+    private void indexMoves(AnalyzedGame game, Long userId, CompletedJob job) {
         try {
-            AnalysisJob job = jobs.findByPublicId(analysisJobId.trim()).orElse(null);
-            if (job == null || job.getResultJson() == null || job.getResultJson().isBlank()) return;
-            CreateAnalysisJobRequest jobRequest =
-                    objectMapper.readValue(job.getRequestJson(), CreateAnalysisJobRequest.class);
-            AnalysisResultResponse result =
-                    objectMapper.readValue(job.getResultJson(), AnalysisResultResponse.class);
-            int written = moveWriter.write(game.getId(), userId, jobRequest.moves(), result);
+            int written = moveWriter.write(game.getId(), userId, job.request().moves(), job.result());
             LOGGER.debug("Đã ghi {} nước đi cho ván {}", written, game.getId());
         } catch (Exception exception) {
             LOGGER.warn("Không lập chỉ mục được nước đi cho ván {}", game.getId(), exception);
         }
     }
+
+    private record CompletedJob(CreateAnalysisJobRequest request, AnalysisResultResponse result) {}
 
     @Transactional(readOnly = true)
     public List<GameSummaryResponse> list(String token) {

@@ -9,12 +9,14 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import com.chessanalysis.auth.analysis.validation.ValidFen;
+
 /**
  * Đánh giá một vị trí do client gửi lên. Giống {@link PositionEvaluationResponse}
  * nhưng có ràng buộc kiểm tra đầu vào, vì đây là dữ liệu đến từ trình duyệt.
  */
 public record PositionEvaluationRequest(
-        @NotBlank @Size(max = 180) String fen,
+        @NotBlank @Size(max = 180) @ValidFen String fen,
         @Min(0) @Max(99) int depth,
         Integer mate,
         @NotNull @Size(max = 64) List<@Size(max = 6) String> moves,

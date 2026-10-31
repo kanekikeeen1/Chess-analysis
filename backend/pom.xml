@@ -19,7 +19,27 @@
     <java.version>17</java.version>
   </properties>
 
+  <repositories>
+    <!-- chesslib chỉ phát hành qua JitPack (build từ tag GitHub), không có trên Maven Central. -->
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
+
   <dependencies>
+    <!-- Luật cờ phía server: sinh nước hợp lệ, chiếu, chiếu hết, hòa. Apache-2.0. -->
+    <dependency>
+      <groupId>com.github.bhlangonijr</groupId>
+      <artifactId>chesslib</artifactId>
+      <version>1.3.6</version>
+    </dependency>
+    <!-- Đọc thẳng lichess_db_puzzle.csv.zst khi import puzzle, không cần giải nén ra đĩa. BSD-2. -->
+    <dependency>
+      <groupId>com.github.luben</groupId>
+      <artifactId>zstd-jni</artifactId>
+      <version>1.5.7-20</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-web</artifactId>

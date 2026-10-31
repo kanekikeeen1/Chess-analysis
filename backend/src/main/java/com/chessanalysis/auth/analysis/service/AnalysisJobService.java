@@ -1,6 +1,7 @@
 package com.chessanalysis.auth.analysis.service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
@@ -10,8 +11,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.chessanalysis.auth.analysis.dto.AnalysisJobResponse;
 import com.chessanalysis.auth.analysis.dto.AnalysisResultResponse;
 import com.chessanalysis.auth.analysis.dto.CreateAnalysisJobRequest;
+import com.chessanalysis.auth.analysis.dto.PositionEvaluationResponse;
 import com.chessanalysis.auth.analysis.entity.AnalysisJob;
 import com.chessanalysis.auth.analysis.repository.AnalysisJobRepository;
+import com.chessanalysis.auth.chess.GameReplayService;
 import com.chessanalysis.auth.entity.UserAccount;
 import com.chessanalysis.auth.service.ApiException;
 import com.chessanalysis.auth.service.AuthService;
@@ -24,6 +27,7 @@ public class AnalysisJobService {
     private final AnalysisJobQueue queue;
     private final AnalysisJobStateService state;
     private final AuthService authService;
+    private final GameReplayService replay;
     private final ObjectMapper objectMapper;
 
     public AnalysisJobService(
@@ -31,16 +35,20 @@ public class AnalysisJobService {
             AnalysisJobQueue queue,
             AnalysisJobStateService state,
             AuthService authService,
+            GameReplayService replay,
             ObjectMapper objectMapper) {
         this.jobs = jobs;
         this.queue = queue;
         this.state = state;
         this.authService = authService;
+        this.replay = replay;
         this.objectMapper = objectMapper;
     }
 
-    public AnalysisJobResponse create(String token, CreateAnalysisJobRequest request) {
-        validateTimeline(request);
+    public AnalysisJobResponse create(String token, CreateAnalysisJobRequest clientRequest) {
+        validateTimeline(clientRequest);
+        // Từ đây chỉ dùng bản đã được server đi lại và tính lại đặc trưng.
+        CreateAnalysisJobRequest request = replay.verify(clientRequest);
         UserAccount user = authService.currentAccountOrNull(token);
         Instant now = Instant.now();
         AnalysisJob job = jobs.saveAndFlush(new AnalysisJob(
@@ -55,13 +63,19 @@ public class AnalysisJobService {
             state.fail(job.getId(), exception.getMessage());
             throw exception;
         }
-        return toResponse(job);
+        return toResponse(job, 0);
     }
 
+    /**
+     * @param fromEvaluation chỉ trả các đánh giá từ vị trí này trở đi. Frontend poll
+     *     liên tục trong lúc job chạy; gửi lại toàn bộ danh sách mỗi lần khiến tổng
+     *     dữ liệu truyền đi tăng theo bình phương số nước của ván.
+     */
     @Transactional(readOnly = true)
-    public AnalysisJobResponse get(String publicId) {
+    public AnalysisJobResponse get(String publicId, int fromEvaluation) {
         return toResponse(jobs.findByPublicId(publicId)
-                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tác vụ phân tích.")));
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Không tìm thấy tác vụ phân tích.")),
+                fromEvaluation);
     }
 
     private void validateTimeline(CreateAnalysisJobRequest request) {
@@ -89,19 +103,25 @@ public class AnalysisJobService {
         }
     }
 
-    private AnalysisJobResponse toResponse(AnalysisJob job) {
+    private AnalysisJobResponse toResponse(AnalysisJob job, int fromEvaluation) {
         AnalysisResultResponse result = null;
+        int evaluationsFrom = 0;
         if (job.getResultJson() != null && !job.getResultJson().isBlank()) {
             try {
                 result = objectMapper.readValue(job.getResultJson(), AnalysisResultResponse.class);
             } catch (JsonProcessingException exception) {
                 throw new IllegalStateException("Kết quả phân tích đã lưu không hợp lệ.", exception);
             }
+            List<PositionEvaluationResponse> all = result.evaluations();
+            evaluationsFrom = Math.max(0, Math.min(fromEvaluation, all.size()));
+            result = new AnalysisResultResponse(
+                    all.subList(evaluationsFrom, all.size()), result.moves(),
+                    result.whiteAccuracy(), result.blackAccuracy(), result.averageDepth());
         }
         return new AnalysisJobResponse(
                 job.getPublicId(), job.getSourceType(), job.getStatus(), job.getProgressPercent(),
                 job.getCompletedPositions(), job.getTotalPositions(), job.getMinDepth(), job.getMaxDepth(),
-                job.getCurrentPosition(), job.getErrorMessage(), result, job.getCreatedAt(),
+                job.getCurrentPosition(), job.getErrorMessage(), result, evaluationsFrom, job.getCreatedAt(),
                 job.getUpdatedAt(), job.getCompletedAt());
     }
 }

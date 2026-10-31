@@ -4,7 +4,7 @@
 
 ```text
 chess-analysis/
-├── frontend/   React 19, Vinext, Stockfish 18, chess.js và Tailwind CSS
+├── frontend/   Next.js 16, React 19, Stockfish 18 WASM, chess.js và Tailwind CSS
 └── backend/    Spring Boot 3, Java 17, Spring Security, JPA, Flyway và MySQL 8
 ```
 
@@ -50,13 +50,16 @@ src/main/java/com/chessanalysis/auth/ChessAnalysisBackendApplication.java
 
 Backend sẵn sàng khi log có `Started ChessAnalysisBackendApplication`, tại `http://localhost:8080`.
 
-Flyway tự áp dụng bảy migration:
+Flyway tự áp dụng các migration:
 
 - `V1–V3`: tài khoản, phiên đăng nhập và avatar.
 - `V4`: kho báo cáo `analyzed_games`.
 - `V5`: bài học `exercise_lessons` và lịch sử `exercise_attempts`.
 - `V6`: tác vụ Stockfish bất đồng bộ `analysis_jobs`.
 - `V7`: ngân hàng thế cờ ngẫu nhiên `exercise_positions`.
+- `V8–V11`: dữ liệu từng nước `analyzed_moves`, cache `position_evaluations`, hồ sơ kỹ năng.
+- `V12`: sửa 10 thế tàn cuộc sai luật hoặc sai nội dung trong V5/V7.
+- `V13`: phiên làm bài tàn cuộc `exercise_sessions` do server giữ trạng thái.
 
 Nếu chạy Spring Boot trực tiếp trong IntelliJ, tải Stockfish cho Windows rồi thêm biến môi trường vào Run Configuration:
 
@@ -82,7 +85,7 @@ npm install
 npm run dev
 ```
 
-Mở địa chỉ Vite hiển thị, thường là `http://localhost:5173`. Bản này không còn cần Wrangler hoặc biến `WRANGLER_LOG_PATH`.
+Mở `http://localhost:3000`.
 
 Nếu backend không chạy ở cổng 8080, sao chép `.env.example` thành `.env.local` và sửa:
 
@@ -120,9 +123,9 @@ npm test
 Backend:
 
 ```powershell
-mvnw.cmd test
+.\mvnw.cmd test
 ```
 
-Nếu dự án chưa có Maven Wrapper, dùng cửa sổ Maven của IntelliJ hoặc lệnh `mvn test` khi máy đã cài Maven.
+Maven Wrapper tự tải Maven 3.9.11 ở lần chạy đầu, không cần cài Maven riêng.
 
 Chi tiết endpoint nằm trong `backend/README.md`; sơ đồ luồng và mô hình dữ liệu nằm trong `docs/ARCHITECTURE.md`.

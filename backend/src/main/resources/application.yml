@@ -43,3 +43,15 @@ app:
     # Nên bằng pool-size: nhiều worker hơn engine chỉ làm các tác vụ giành nhau.
     workers: ${ANALYSIS_WORKERS:2}
     queue-capacity: ${ANALYSIS_QUEUE_CAPACITY:32}
+  # Tiêu chí lọc khi import Lichess Puzzle Database. Import chỉ chạy khi có tham số
+  # --app.puzzles.import-file=<đường dẫn tới lichess_db_puzzle.csv.zst>.
+  puzzles:
+    per-band: 4000          # số puzzle tối đa mỗi dải rating
+    band-width: 200         # độ rộng một dải rating
+    min-rating: 600
+    max-rating: 2999
+    min-plays: 300          # đã được chơi đủ nhiều để rating đáng tin
+    max-deviation: 90       # RatingDeviation tối đa
+    min-popularity: 80      # thang -100..100, người chơi đánh giá tốt
+    max-moves: 16           # độ dài tối đa của cột Moves (kể cả nước dàn dựng)
+    seed: 1337              # cố định để chạy lại cho ra cùng một tập puzzle

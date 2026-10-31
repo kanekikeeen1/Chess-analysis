@@ -12,6 +12,10 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import jakarta.validation.ConstraintViolationException;
 
 import com.chessanalysis.auth.analysis.engine.EngineUnavailableException;
 import com.chessanalysis.auth.dto.ApiError;
@@ -43,6 +47,15 @@ public class ApiExceptionHandler {
         }
         return ResponseEntity.badRequest()
                 .body(new ApiError("Dữ liệu gửi lên chưa hợp lệ.", fields, Instant.now()));
+    }
+
+    /** Tham số query/path sai kiểu hoặc vi phạm ràng buộc (ví dụ {@code ?rating=abc}): lỗi của client. */
+    @ExceptionHandler({
+            ConstraintViolationException.class,
+            HandlerMethodValidationException.class,
+            MethodArgumentTypeMismatchException.class})
+    ResponseEntity<ApiError> handleInvalidParameter(Exception exception) {
+        return ResponseEntity.badRequest().body(new ApiError("Tham số yêu cầu không hợp lệ."));
     }
 
     @ExceptionHandler(Exception.class)
