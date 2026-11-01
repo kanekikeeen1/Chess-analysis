@@ -1,0 +1,344 @@
+{
+  "players": [
+    "liem",
+    "carlsen",
+    "hikaru"
+  ],
+  "checkpoints": {
+    "base": "runs\\m2-rtx5060ti-v2\\best.pt",
+    "liem": "runs\\style4-liem\\best.pt",
+    "carlsen": "runs\\style4-carlsen\\best.pt",
+    "hikaru": "runs\\style4-hikaru\\best.pt"
+  },
+  "accuracy": {
+    "liem": {
+      "base": {
+        "n": 20763,
+        "top1": 0.33371863410875113,
+        "top3": 0.6148437123729712,
+        "nll": 2.261125087738037
+      },
+      "liem": {
+        "n": 20763,
+        "top1": 0.38573423879015556,
+        "top3": 0.6664258536820306,
+        "nll": 2.029235363006592
+      },
+      "carlsen": {
+        "n": 20763,
+        "top1": 0.38130327987285073,
+        "top3": 0.6677262437990656,
+        "nll": 2.043199062347412
+      },
+      "hikaru": {
+        "n": 20763,
+        "top1": 0.3769686461494004,
+        "top3": 0.6622838703462891,
+        "nll": 2.0586342811584473
+      }
+    },
+    "carlsen": {
+      "base": {
+        "n": 34382,
+        "top1": 0.33502995753591996,
+        "top3": 0.6058402652550753,
+        "nll": 2.258222818374634
+      },
+      "liem": {
+        "n": 34382,
+        "top1": 0.3845907742423361,
+        "top3": 0.666482461753243,
+        "nll": 2.0314762592315674
+      },
+      "carlsen": {
+        "n": 34382,
+        "top1": 0.39541038915711707,
+        "top3": 0.6777092664766448,
+        "nll": 1.9939589500427246
+      },
+      "hikaru": {
+        "n": 34382,
+        "top1": 0.3829329300215229,
+        "top3": 0.6671514164388342,
+        "nll": 2.0320656299591064
+      }
+    },
+    "hikaru": {
+      "base": {
+        "n": 188827,
+        "top1": 0.3267011603213523,
+        "top3": 0.5947560465399545,
+        "nll": 2.3062684535980225
+      },
+      "liem": {
+        "n": 188827,
+        "top1": 0.369459875971127,
+        "top3": 0.649970608016862,
+        "nll": 2.091237783432007
+      },
+      "carlsen": {
+        "n": 188827,
+        "top1": 0.3749199002261329,
+        "top3": 0.6577184406890964,
+        "nll": 2.0724833011627197
+      },
+      "hikaru": {
+        "n": 188827,
+        "top1": 0.3839546251330583,
+        "top3": 0.6649737590492885,
+        "nll": 2.0349719524383545
+      }
+    }
+  },
+  "diagonalWins": {
+    "liem": true,
+    "carlsen": true,
+    "hikaru": true
+  },
+  "diagonalVsOthers": {
+    "liem": {
+      "base": {
+        "diff": 0.05201560468140442,
+        "ci95": [
+          0.04696269883971422,
+          0.05712638399565061
+        ],
+        "significant": true
+      },
+      "carlsen": {
+        "diff": 0.004430958917304821,
+        "ci95": [
+          0.0003474212168593913,
+          0.00861905443523412
+        ],
+        "significant": true
+      },
+      "hikaru": {
+        "diff": 0.00876559264075519,
+        "ci95": [
+          0.004316309260118024,
+          0.013046300904371975
+        ],
+        "significant": true
+      }
+    },
+    "carlsen": {
+      "base": {
+        "diff": 0.06038043162119714,
+        "ci95": [
+          0.05601757953231598,
+          0.06446808244471833
+        ],
+        "significant": true
+      },
+      "liem": {
+        "diff": 0.01081961491478099,
+        "ci95": [
+          0.0068925097209413385,
+          0.014760611089724786
+        ],
+        "significant": true
+      },
+      "hikaru": {
+        "diff": 0.012477459135594206,
+        "ci95": [
+          0.00880082885190872,
+          0.016354153987434644
+        ],
+        "significant": true
+      }
+    },
+    "hikaru": {
+      "base": {
+        "diff": 0.057253464811705956,
+        "ci95": [
+          0.0553766876890192,
+          0.059302043368558016
+        ],
+        "significant": true
+      },
+      "liem": {
+        "diff": 0.01449474916193129,
+        "ci95": [
+          0.012831691813142174,
+          0.016158221546643363
+        ],
+        "significant": true
+      },
+      "carlsen": {
+        "diff": 0.009034724906925386,
+        "ci95": [
+          0.007449889523571681,
+          0.010650929140281385
+        ],
+        "significant": true
+      }
+    }
+  },
+  "testGames": {
+    "liem": 467,
+    "carlsen": 873,
+    "hikaru": 4804
+  },
+  "identification": {
+    "raw": {
+      "1": {
+        "accuracy": {
+          "liem": 0.41541755888650966,
+          "carlsen": 0.5085910652920962,
+          "hikaru": 0.5457951706910907
+        },
+        "macroAccuracy": 0.4899345982898988,
+        "confusion": {
+          "liem": {
+            "hikaru": 123,
+            "liem": 194,
+            "carlsen": 150
+          },
+          "carlsen": {
+            "liem": 187,
+            "carlsen": 444,
+            "hikaru": 242
+          },
+          "hikaru": {
+            "hikaru": 2622,
+            "liem": 843,
+            "carlsen": 1339
+          }
+        }
+      },
+      "5": {
+        "accuracy": {
+          "liem": 0.552,
+          "carlsen": 0.713,
+          "hikaru": 0.746
+        },
+        "macroAccuracy": 0.6703333333333333,
+        "confusion": {
+          "liem": {
+            "carlsen": 594,
+            "liem": 1104,
+            "hikaru": 302
+          },
+          "carlsen": {
+            "carlsen": 1426,
+            "hikaru": 303,
+            "liem": 271
+          },
+          "hikaru": {
+            "hikaru": 1492,
+            "carlsen": 380,
+            "liem": 128
+          }
+        }
+      },
+      "10": {
+        "accuracy": {
+          "liem": 0.6255,
+          "carlsen": 0.829,
+          "hikaru": 0.86
+        },
+        "macroAccuracy": 0.7715,
+        "confusion": {
+          "liem": {
+            "carlsen": 561,
+            "hikaru": 188,
+            "liem": 1251
+          },
+          "carlsen": {
+            "carlsen": 1658,
+            "hikaru": 188,
+            "liem": 154
+          },
+          "hikaru": {
+            "hikaru": 1720,
+            "carlsen": 226,
+            "liem": 54
+          }
+        }
+      }
+    },
+    "calibrated": {
+      "1": {
+        "accuracy": {
+          "liem": 0.44325481798715205,
+          "carlsen": 0.4925544100801833,
+          "hikaru": 0.5287260616153205
+        },
+        "macroAccuracy": 0.4881784298942186,
+        "confusion": {
+          "liem": {
+            "hikaru": 114,
+            "liem": 207,
+            "carlsen": 146
+          },
+          "carlsen": {
+            "liem": 214,
+            "carlsen": 430,
+            "hikaru": 229
+          },
+          "hikaru": {
+            "hikaru": 2540,
+            "liem": 972,
+            "carlsen": 1292
+          }
+        }
+      },
+      "5": {
+        "accuracy": {
+          "liem": 0.6285,
+          "carlsen": 0.6765,
+          "hikaru": 0.72
+        },
+        "macroAccuracy": 0.6749999999999999,
+        "confusion": {
+          "liem": {
+            "carlsen": 499,
+            "liem": 1257,
+            "hikaru": 244
+          },
+          "carlsen": {
+            "carlsen": 1353,
+            "hikaru": 272,
+            "liem": 375
+          },
+          "hikaru": {
+            "hikaru": 1440,
+            "carlsen": 372,
+            "liem": 188
+          }
+        }
+      },
+      "10": {
+        "accuracy": {
+          "liem": 0.7275,
+          "carlsen": 0.796,
+          "hikaru": 0.8425
+        },
+        "macroAccuracy": 0.7886666666666667,
+        "confusion": {
+          "liem": {
+            "liem": 1455,
+            "carlsen": 414,
+            "hikaru": 131
+          },
+          "carlsen": {
+            "carlsen": 1592,
+            "hikaru": 163,
+            "liem": 245
+          },
+          "hikaru": {
+            "hikaru": 1685,
+            "carlsen": 213,
+            "liem": 102
+          }
+        }
+      }
+    },
+    "bias": {
+      "liem": -2.0582024256388345,
+      "carlsen": -2.0513118902842202,
+      "hikaru": -2.0506948630015054
+    }
+  }
+}

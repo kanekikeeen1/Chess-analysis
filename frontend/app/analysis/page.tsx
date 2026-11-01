@@ -79,6 +79,7 @@ import {
 import { MoveHistory } from "@/components/analysis/move-history";
 import { HumanMovesPanel } from "@/components/analysis/human-moves-panel";
 import { GameEloCard } from "@/components/analysis/game-elo-card";
+import { GmCoachPanel } from "@/components/analysis/gm-coach-panel";
 import { StyleMatchCard } from "@/components/analysis/style-match-card";
 import { StyleMovesPanel } from "@/components/analysis/style-moves-panel";
 import { IMPORT_PGN_KEY } from "@/lib/human-moves";
@@ -749,7 +750,13 @@ export default function AnalysisPage() {
   }
 
   function playBestMoveSuggestion() {
-    if (!bestMoveSuggestion || currentIndex <= 0) return;
+    if (!bestMoveSuggestion) return;
+    replaceCurrentMove(bestMoveSuggestion.uci, "nước đi tốt nhất");
+  }
+
+  /** Quay lại trước nước vừa đi và thay nó bằng {@code uci}; trong review thì mở thành biến thể. */
+  function replaceCurrentMove(replacementUci: string, description: string) {
+    if (currentIndex <= 0) return;
 
     const replacedMoveIndex = currentIndex - 1;
     const beforeFen = positions[replacedMoveIndex];
@@ -758,9 +765,9 @@ export default function AnalysisPage() {
     try {
       const nextGame = new Chess(beforeFen);
       const move = nextGame.move({
-        from: bestMoveSuggestion.uci.slice(0, 2) as Square,
-        promotion: (bestMoveSuggestion.uci[4] as "q" | "r" | "b" | "n" | undefined) ?? "q",
-        to: bestMoveSuggestion.uci.slice(2, 4) as Square,
+        from: replacementUci.slice(0, 2) as Square,
+        promotion: (replacementUci[4] as "q" | "r" | "b" | "n" | undefined) ?? "q",
+        to: replacementUci.slice(2, 4) as Square,
       });
       const san = canonicalMoveSan(move.san, nextGame.fen());
       const replacedMove = moves[replacedMoveIndex];
@@ -793,10 +800,10 @@ export default function AnalysisPage() {
       setCurrentIndex(replacedMoveIndex + 1);
       setSelectedSquare(null);
       setInputError("");
-      setMessage(`Đã thay ${replacedMove} bằng nước đi tốt nhất ${san}`);
+      setMessage(`Đã thay ${replacedMove} bằng ${description} ${san}`);
       playBoardSound(move.isCapture());
     } catch {
-      setMessage("Không thể triển khai nước đi tốt nhất ở vị trí này");
+      setMessage(`Không thể triển khai ${description} ở vị trí này`);
     }
   }
 
@@ -1239,6 +1246,15 @@ export default function AnalysisPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {(sideTab === "engine" || sideTab === "report") && currentIndex > 0 && positions[currentIndex - 1] && uciMoves[currentIndex - 1] && (
+            <GmCoachPanel
+              assessment={currentMoveAssessment}
+              fen={positions[currentIndex - 1]}
+              onTryMove={replaceCurrentMove}
+              uci={uciMoves[currentIndex - 1]}
+            />
           )}
 
           {sideTab !== "load" && (

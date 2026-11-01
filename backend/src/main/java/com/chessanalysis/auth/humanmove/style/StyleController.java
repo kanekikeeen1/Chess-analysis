@@ -16,6 +16,8 @@ import com.chessanalysis.auth.humanmove.style.dto.StyleCompareResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMatchResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMoveRequest;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMoveResponse;
+import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionRequest;
+import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StylesResponse;
 
 /** Mô hình phong cách kiện tướng (giai đoạn D): đấu bot, so sánh trên trang phân tích, báo cáo ván. Không cần đăng nhập. */
@@ -36,6 +38,11 @@ public class StyleController {
     @PostMapping("/compare")
     public StyleCompareResponse compare(@Valid @RequestBody StyleCompareRequest request) {
         return service.compare(request.fen(), request.topKOrDefault(), request.engineDepth());
+    }
+
+    @PostMapping("/opinion")
+    public StyleOpinionResponse opinion(@Valid @RequestBody StyleOpinionRequest request) {
+        return service.opinion(request.fen(), request.uci(), request.engineDepth());
     }
 
     /** Cùng định dạng request với ước lượng Elo: các nước của một ván, bên đi suy ra từ FEN. */

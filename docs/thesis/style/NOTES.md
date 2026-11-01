@@ -59,7 +59,8 @@ Nếu không hiệu chỉnh, gần như mọi ván đều bị gán cho Nakamura
    tốt hơn chính mô hình của họ ở vòng 1. Ở vòng 2, khoảng cách thu hẹp về mức không ý nghĩa. Lý do là
    lượng dữ liệu: tầng cuối của Nakamura học thêm 1,6M vị trí (nhiều gấp 5 lần GM chung), nên vừa học phong cách
    vừa giỏi hơn ở cờ blitz nói chung. Với ~150–300k vị trí, tầng cuối của Liêm và Carlsen quá khớp gần như ngay lập tức:
-   loss val tăng từ bước 100–200, dừng sớm ở bước 600 và 1.200.
+   loss val tăng từ bước 100–200, dừng sớm ở bước 600 và 1.200. Một phần là do GM chung đã chứa sẵn train của
+   hai người này (xem mục 4).
 3. **Vẫn có tín hiệu phong cách đo được, nhưng yếu, và chỉ thấy khi gộp nhiều ván.** Từ 10 ván, bộ nhận diện
    đã hiệu chỉnh đoán đúng người chơi 78–83%, so với 33% nếu đoán ngẫu nhiên. Tín hiệu này nằm ở **phân phối xác suất** (log-likelihood)
    chứ không ở top-1. Vòng 1 nhận diện tốt hơn vòng 2: các mô hình vòng 1 khác nhau nhiều hơn vì xuất phát
@@ -67,18 +68,56 @@ Nếu không hiệu chỉnh, gần như mọi ván đều bị gán cho Nakamura
 4. **So với Stockfish** (depth 12, 500 vị trí mỗi người): Stockfish trùng nước kiện tướng 47–53%, cao
    hơn mọi mô hình (40–42%). Ở trình độ 2800+, nước của người thường trùng với nước tốt nhất của engine, nên chỉ số top-1
    không phân biệt được "đi giống người" với "đi mạnh". Chỉ số NLL và nhận diện kỳ thủ phản ánh phong cách tốt hơn.
-5. **Kết luận trung thực cho báo cáo:** với dữ liệu công khai (phần lớn là blitz online) và quy mô
-   150k–1,6M vị trí, phương pháp fine-tune tái hiện tốt "cách đi của kiện tướng" nhưng chỉ tách được phong cách
-   cá nhân rõ rệt khi có trên khoảng 1M vị trí (trường hợp Nakamura). Kết quả này khớp với McIlroy-Young và cộng sự (2022):
+5. **Kết luận trung thực cho báo cáo** (sau thí nghiệm đối chứng ở mục 4): với dữ liệu công khai (phần lớn là
+   blitz online), fine-tune từ M2 nền tách được phong cách cá nhân, nhưng chỉ khi so sánh **cùng lượng dữ liệu**. Ở đó
+   đường chéo trội có ý nghĩa với cả 3 người (+0,4 đến +1,5 điểm). Khi dữ liệu lệch 10 lần, lợi thế dữ liệu (tới +3 điểm)
+   át phần phong cách. Kết quả này khớp với McIlroy-Young và cộng sự (2022):
    mô hình cá nhân hóa cần nhiều ván, và độ khác biệt giữa các người chơi mạnh nhỏ hơn giữa người chơi yếu.
 
-## 4. Thí nghiệm đối chứng: cùng lượng dữ liệu (vòng 3, `style3-*.yaml`)
+## 4. Thí nghiệm đối chứng: cùng lượng dữ liệu
 
-Để tách "phong cách" khỏi "lượng dữ liệu", cả 3 người được fine-tune từ GM chung với **cùng 157k vị trí
-train**, bằng của Liêm (`prepare_style_data.py --equal-only`), cùng số bước và cùng siêu tham số. Để giảm quá khớp,
-lr là 1e-4 và đóng băng 6/10 khối. Nếu đường chéo vẫn không trội, có thể kết luận phong cách riêng ở quy mô
-này không đo được bằng top-1. Nếu trội, sự áp đảo của Nakamura ở vòng 1–2 là do dữ liệu.
-*(Điền kết quả sau khi chạy.)*
+**Vòng 3** (`style3-*.yaml`): từ GM chung, mỗi người đúng 157k vị trí train, lr 1e-4, đóng băng 6/10 khối.
+
+| Kỳ thủ | GM chung trên val (top1 · loss) | Tốt nhất sau fine-tune | Dừng ở bước |
+| --- | --- | --- | ---: |
+| Liêm | 40,61% · 1,9192 | 41,17% · loss thấp nhất 1,9188 | 900 |
+| Carlsen | 40,84% · 1,9233 | 40,86% · loss không giảm | 600 |
+| Nakamura | 39,63% · 1,9614 | 39,82% · 1,9415 | 1.500 |
+
+Cùng lượng dữ liệu, chỉ Nakamura giảm được loss val rõ rệt (−0,020). Liêm và Carlsen gần như đứng yên.
+Nguyên nhân là cách dựng GM chung: mỗi người góp tối đa 300k vị trí, nên GM chung **đã chứa toàn bộ train của
+Liêm (157k) và gần hết của Carlsen (300k/301k)**, nhưng chỉ 19% train của Nakamura. Tầng cuối của Liêm và Carlsen
+vì thế chỉ học lại các ván đã thấy, còn Nakamura được thêm ván mới. Điều này cũng giải thích vòng 2: "Liêm ≈ GM chung"
+là hệ quả của thiết kế chứ không phải bằng chứng là không có phong cách. Đây là một sai sót thiết kế cần nêu trong báo cáo.
+
+**Vòng 4** (`style4-*.yaml`), thí nghiệm đối chứng sạch: xuất phát từ **M2 nền** như vòng 1, siêu tham số giống hệt vòng 1,
+mỗi người đúng 157k vị trí. Cả ba cùng gặp dữ liệu của mình lần đầu với cùng lượng dữ liệu, nên chênh lệch trên đường chéo
+chỉ còn do phong cách. Với Liêm, run này trùng vòng 1 (cùng dữ liệu, cùng cấu hình), nên cũng kiểm tra được độ lặp lại.
+
+Kết quả (`d4-eval-v4/`, top-1 trên test, %):
+
+| Ván của \ Mô hình | M2 nền | Liêm | Carlsen | Nakamura |
+| --- | ---: | ---: | ---: | ---: |
+| Liêm | 33,37 | **38,57** | 38,13 | 37,70 |
+| Carlsen | 33,50 | 38,46 | **39,54** | 38,29 |
+| Nakamura | 32,67 | 36,95 | 37,49 | **38,40** |
+
+| Kỳ thủ | so với 2 người còn lại (khoảng tin cậy 95% theo ván) |
+| --- | --- |
+| Liêm | Carlsen +0,44 [+0,03; +0,86] · Nakamura +0,88 [+0,43; +1,30] |
+| Carlsen | Liêm +1,08 [+0,69; +1,48] · Nakamura +1,25 [+0,88; +1,64] |
+| Nakamura | Liêm +1,45 [+1,28; +1,62] · Carlsen +0,90 [+0,74; +1,07] |
+
+Nhận diện kỳ thủ từ 10 ván: 77,1% khi chưa hiệu chỉnh và 78,9% khi đã hiệu chỉnh. Không còn lệch hẳn về một người như vòng 1–2:
+Liêm 72,8% · Carlsen 79,6% · Nakamura 84,2%.
+
+- **Cả 6 phép so sánh trên đường chéo đều dương và có ý nghĩa.** Khi cùng lượng dữ liệu, mô hình của mỗi người đoán ván
+  của chính họ tốt hơn mô hình của hai người kia. Tiêu chí thứ hai của D4 đạt.
+- Khoảng cách nhỏ (+0,4 đến +1,5 điểm) so với mức tăng từ M2 nền (+5 đến +6 điểm): phần lớn những gì mô hình học
+  vẫn là "cờ kiện tướng nói chung", phần riêng của mỗi người chỉ là một phần nhỏ, đúng như dự kiến ở trình độ 2800.
+- **Độ lặp lại:** Liêm ở vòng 4 đạt 38,57%, vòng 1 đạt 38,59%, dù dữ liệu và cấu hình như nhau nhưng thứ tự trộn khác nhau.
+- So với vòng 1, Carlsen giảm từ 40,38 xuống 39,54 và Nakamura từ 41,65 xuống 38,40 khi bị cắt dữ liệu: đó chính là phần
+  mà lượng dữ liệu đóng góp, và cũng là lý do mô hình Nakamura thắng ở mọi cột trong vòng 1.
 
 ## 5. Lựa chọn mô hình phục vụ (D5)
 

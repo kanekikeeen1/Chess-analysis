@@ -95,6 +95,16 @@ function SideColumn({ label, matches, piece }: { label: string; matches: StyleMa
           })}
         </ul>
       )}
+      {sorted.length > 1 && <p className="mt-2 text-[11px] leading-4 text-[#c5cec7]">{closestComment(sorted)}</p>}
     </div>
   );
+}
+
+/** Kết luận ngắn: gần phong cách ai nhất, hay khác biệt quá nhỏ để nói. Chênh dưới 3 điểm % coi như ngang nhau. */
+function closestComment(sorted: StyleMatch[]) {
+  const rate = (match: StyleMatch) => match.top1 / match.moves;
+  const [first, second] = sorted;
+  if (first.moves < 10) return "Ván quá ngắn để so phong cách.";
+  if (rate(first) - rate(second) < 0.03) return "Mức trùng với các kiện tướng gần như ngang nhau.";
+  return `Lựa chọn gần với ${shortName(first.displayName)} nhất.`;
 }

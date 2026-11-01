@@ -137,3 +137,80 @@ export function matchStyles(moves: Array<{ fen: string; uci: string }>, signal?:
     signal,
   });
 }
+
+export type StylePuzzle = {
+  id: string;
+  style: string;
+  displayName: string;
+  fen: string;
+  ply: number;
+  date: string;
+  speed: string;
+  /** Kỳ thủ cầm quân gì trong ván gốc, cũng là bên đi ở `fen`. */
+  color: "white" | "black";
+  elo: number | null;
+  opponentElo: number | null;
+  poolSize: number;
+};
+
+export type StylePuzzleCheck = {
+  correct: boolean;
+  /** match: trùng nước kỳ thủ · good: khác nhưng Stockfish đánh giá ngang · weak: kém hơn · unknown: không chấm được. */
+  verdict: "match" | "good" | "weak" | "unknown";
+  answerUci: string;
+  answerSan: string;
+  userSan: string;
+  /** Điểm centipawn nhìn từ bên đi. */
+  userCp: number | null;
+  answerCp: number;
+  bestCp: number;
+  answerProbability: number | null;
+  userProbability: number | null;
+  /** Kết quả ván gốc nhìn từ kỳ thủ: 1 thắng, 0 hòa, -1 thua. */
+  result: number | null;
+  engine: Array<{ uci: string; san: string; cp: number }>;
+};
+
+export function fetchStylePuzzle(style: string | null, exclude: string[], signal?: AbortSignal) {
+  const query = new URLSearchParams();
+  if (style) query.set("style", style);
+  if (exclude.length) query.set("exclude", exclude.slice(-200).join(","));
+  return backendRequest<StylePuzzle>(`/api/styles/puzzles/next?${query}`, { signal });
+}
+
+export function checkStylePuzzle(id: string, uci: string) {
+  return backendRequest<StylePuzzleCheck>(`/api/styles/puzzles/${encodeURIComponent(id)}/check`, {
+    method: "POST",
+    body: JSON.stringify({ uci }),
+  });
+}
+
+export type StyleOpinion = {
+  style: string;
+  displayName: string;
+  /** book: theo ván thật của kỳ thủ ở đúng thế cờ này; model: theo mô hình phong cách. */
+  source: "book" | "model";
+  bookGames: number | null;
+  /** Số lần kỳ thủ đi đúng nước này (chỉ khi source = book). */
+  playedCount: number | null;
+  playedProbability: number;
+  /** 0 = lựa chọn số 1 của kỳ thủ. */
+  playedRank: number;
+  top: ScoredHumanMove[];
+};
+
+export type StyleOpinionResponse = {
+  fen: string;
+  played: ScoredHumanMove;
+  styles: StyleOpinion[];
+  engineNote: string | null;
+};
+
+/** Góc nhìn của từng kiện tướng về nước `uci` đi từ `fen`. */
+export function fetchStyleOpinion(fen: string, uci: string, options: { engineDepth?: number; signal?: AbortSignal } = {}) {
+  return backendRequest<StyleOpinionResponse>("/api/styles/opinion", {
+    method: "POST",
+    body: JSON.stringify({ fen, uci, engineDepth: options.engineDepth ?? null }),
+    signal: options.signal,
+  });
+}

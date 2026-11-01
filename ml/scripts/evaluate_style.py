@@ -119,6 +119,8 @@ def write_figures(report: dict, out_dir: Path, names: dict[str, str]) -> None:
 
 
 def main() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--players", type=Path, default=Path("config/players.yaml"))
     parser.add_argument("--base", type=Path, default=Path("runs/m2-rtx5060ti-v2/best.pt"))
@@ -131,12 +133,14 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=1024)
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--stockfish", default=os.environ.get("STOCKFISH_PATH"))
+    # PowerShell 5.1 bỏ mất đối số rỗng (--stockfish ""), nên cần một cờ riêng để tắt cột Stockfish.
+    parser.add_argument("--no-stockfish", action="store_true", help="Bỏ cột Stockfish dù STOCKFISH_PATH đã đặt")
     parser.add_argument("--stockfish-rows", type=int, default=500)
     parser.add_argument("--stockfish-depth", type=int, default=12)
     args = parser.parse_args()
+    if args.no_stockfish:
+        args.stockfish = None
 
-    for stream in (sys.stdout, sys.stderr):
-        stream.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 
     players = load_players(args.players)

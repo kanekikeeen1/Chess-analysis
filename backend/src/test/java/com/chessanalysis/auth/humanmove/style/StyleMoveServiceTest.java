@@ -80,6 +80,22 @@ class StyleMoveServiceTest {
             assertEquals(1, match.black().get(0).moves());
             assertEquals(0, match.black().get(0).inBook());
 
+            // Góc nhìn kiện tướng: trong sổ, d4 đi 3/10 lần, đứng thứ 2; b3 chưa từng đi, xếp sau cả 3 nước trong sổ.
+            var opinion = service.opinion(START, "d2d4", null);
+            var tester = opinion.styles().get(0);
+            assertEquals("d4", opinion.played().san());
+            assertEquals("book", tester.source());
+            assertEquals(3, tester.playedCount());
+            assertEquals(1, tester.playedRank());
+            assertEquals(0.3, tester.playedProbability(), 1e-9);
+            assertEquals("e4", tester.top().get(0).san());
+            assertEquals(3, service.opinion(START, "b2b3", null).styles().get(0).playedRank());
+            // Ngoài sổ: xếp hạng theo mô hình.
+            var modelOpinion = service.opinion(RUY_LOPEZ, "a7a6", null).styles().get(0);
+            assertEquals("model", modelOpinion.source());
+            assertTrue(modelOpinion.playedProbability() > 0);
+            assertEquals(3, modelOpinion.top().size());
+
             ApiException missing = assertThrows(ApiException.class, () -> service.moves("nobody", START, 5));
             assertEquals(404, missing.getStatus().value());
         } finally {

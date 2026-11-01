@@ -22,6 +22,7 @@ import com.chessanalysis.auth.humanmove.style.StyleModelRegistry.Style;
 import com.chessanalysis.auth.humanmove.style.dto.StyleCompareResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMatchResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMoveResponse;
+import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StylesResponse;
 import com.chessanalysis.auth.service.ApiException;
 import com.github.bhlangonijr.chesslib.Board;
@@ -81,6 +82,54 @@ public class StyleMoveService {
                         style.moves().stream().map(move -> withScore(move, scores.byMove().get(move.uci()))).toList()))
                 .toList();
         return new StyleCompareResponse(normalized, scored, scores.note());
+    }
+
+    /**
+     * Trang phân tích, "góc nhìn kiện tướng" cho một nước đã đi: với từng kỳ thủ, nước đó đứng thứ mấy trong lựa chọn
+     * của họ và họ sẽ đi gì. Stockfish chấm một lần cho nước đã đi cùng hợp các nước kỳ thủ chọn.
+     */
+    public StyleOpinionResponse opinion(String fen, String uci, Integer engineDepth) {
+        requireStyles();
+        Board board = ChessRules.load(fen);
+        String normalized = ChessRules.chessJsFen(board);
+        Move played = ChessRules.findLegal(board, uci).orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST,
+                "Nước " + uci + " không hợp lệ ở thế cờ " + fen + "."));
+        String playedUci = played.toString();
+        int legalCount = board.legalMoves().size();
+
+        List<StyleOpinionResponse.StyleOpinion> opinions = new ArrayList<>();
+        Set<String> distinct = new LinkedHashSet<>(List.of(playedUci));
+        for (Style style : registry.all()) {
+            StyleModelRegistry.Entry entry = style.entry();
+            Map<String, Integer> book = style.book().get(bookKey(normalized));
+            // Sổ trước, mô hình sau (như bot); lấy đủ mọi nước để biết nước đã đi đứng thứ mấy.
+            StyleMoveResponse ranked = moves(style, board, normalized, legalCount);
+            List<ScoredMove> all = ranked.moves();
+            int rank = 0;
+            double probability = 0;
+            while (rank < all.size() && !all.get(rank).uci().equals(playedUci)) rank++;
+            if (rank < all.size()) probability = all.get(rank).probability();
+            // Trong sổ thì nước kỳ thủ chưa từng đi xếp sau mọi nước trong sổ; hòa số lần thì cùng hạng.
+            if ("book".equals(ranked.source())) rank = bookRank(book, playedUci);
+            List<ScoredMove> top = all.subList(0, Math.min(3, all.size()));
+            top.forEach(move -> distinct.add(move.uci()));
+            opinions.add(new StyleOpinionResponse.StyleOpinion(entry.id(), entry.displayName(), ranked.source(),
+                    ranked.bookGames(), "book".equals(ranked.source()) ? book.getOrDefault(playedUci, 0) : null,
+                    probability, rank, List.copyOf(top)));
+        }
+
+        HumanMoveService.EngineScores scores = engines == null
+                ? new HumanMoveService.EngineScores(Map.of(), null)
+                : engines.scoreMoves(normalized, engineDepth, distinct);
+        List<StyleOpinionResponse.StyleOpinion> scored = opinions.stream()
+                .map(opinion -> new StyleOpinionResponse.StyleOpinion(opinion.style(), opinion.displayName(),
+                        opinion.source(), opinion.bookGames(), opinion.playedCount(), opinion.playedProbability(),
+                        opinion.playedRank(),
+                        opinion.top().stream().map(move -> withScore(move, scores.byMove().get(move.uci()))).toList()))
+                .toList();
+        ScoredMove playedMove = withScore(new ScoredMove(playedUci, HumanMoveModel.san(board, played), 0, null, null),
+                scores.byMove().get(playedUci));
+        return new StyleOpinionResponse(normalized, playedMove, scored, scores.note());
     }
 
     /**

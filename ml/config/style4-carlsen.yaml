@@ -1,0 +1,40 @@
+# D4 thí nghiệm đối chứng "cùng lượng dữ liệu, cùng điểm xuất phát": fine-tune M2 nền theo phong cách Magnus Carlsen
+# với đúng 157k vị trí train (bằng Liêm), siêu tham số giống hệt vòng 1 (style-*.yaml).
+#
+#   python scripts/prepare_style_data.py --equal-only
+#   python -m m2.train --config config/style4-carlsen.yaml
+#
+# Vì sao không xuất phát từ GM chung (style3-*): dữ liệu GM chung đã chứa toàn bộ train của Liêm và gần như toàn bộ
+# của Carlsen (≤ 300k/người), nên tầng cuối của họ chỉ học lại ván đã thấy, còn Nakamura được thêm ván mới.
+# Xuất phát từ M2 nền thì cả ba cùng gặp dữ liệu của mình lần đầu, chênh lệch trên đường chéo chỉ còn do phong cách.
+
+data_dir: data/style/equal/carlsen
+run_dir: runs/style4-carlsen
+init_from: runs/m2-rtx5060ti-v2/best.pt
+freeze_blocks: 4
+
+batch_size: 512
+epochs: 12
+lr: 0.0003
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 150
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 8
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 100
+eval_batches: 40
+log_every: 50
+save_every: 1000
+val_rows: 20000
+early_stop_patience: 6
+
+amp: true
+seed: 1337
+max_steps: null
