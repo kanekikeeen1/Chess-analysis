@@ -1,0 +1,10 @@
+test_of,versus,top1_diff,ci95_low,ci95_high,significant
+liem,base,0.0522,0.0469,0.0577,True
+liem,carlsen,-0.0017,-0.0064,0.0028,False
+liem,hikaru,-0.0158,-0.0211,-0.0105,True
+carlsen,base,0.0688,0.0646,0.0731,True
+carlsen,liem,0.0207,0.0167,0.0247,True
+carlsen,hikaru,-0.0032,-0.0070,0.0004,False
+hikaru,base,0.0898,0.0879,0.0919,True
+hikaru,liem,0.0476,0.0457,0.0494,True
+hikaru,carlsen,0.0359,0.0341,0.0376,True

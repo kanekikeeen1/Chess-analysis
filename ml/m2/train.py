@@ -8,6 +8,11 @@ Hỗ trợ dừng và chạy tiếp: mỗi checkpoint lưu đủ trạng thái o
 và scaler, nên ``--resume runs/<tên>/last.pt`` tiếp đúng chỗ đã dừng. Điều này
 quan trọng với Colab/Kaggle vì phiên có thể bị ngắt giữa chừng.
 
+Fine-tune (giai đoạn D, mô hình theo phong cách kỳ thủ): ``init_from`` nạp trọng số M2 nền
+(cấu hình mạng lấy theo checkpoint), ``freeze_blocks`` đóng băng stem, bộ mã hóa Elo và N khối đầu.
+Khi có ``init_from``, mô hình nền được đánh giá trên tập val ngay ở bước 0: đó là mốc "M2 nền" mà
+mô hình fine-tune phải vượt.
+
 Có ba con số cần theo dõi, in ra mỗi lần đánh giá:
 
 * ``top1`` — độ khớp nước đi với người thật. Đây là chỉ số chính của M2.
@@ -82,6 +87,10 @@ class TrainConfig:
     max_steps: int | None = None
     # Dừng khi loss validation không giảm sau chừng này lần đánh giá liên tiếp.
     early_stop_patience: int | None = None
+
+    # Fine-tune: checkpoint M2 nền để khởi tạo, và số khối residual đầu giữ nguyên.
+    init_from: str | None = None
+    freeze_blocks: int = 0
 
     model: ModelConfig = dataclasses.field(default_factory=ModelConfig)
 
@@ -173,6 +182,24 @@ def evaluate(
     }
 
 
+def frozen_modules(model: EloConditionedPolicyNet, freeze_blocks: int) -> list[nn.Module]:
+    """Phần đóng băng khi fine-tune: stem, bộ mã hóa Elo và ``freeze_blocks`` khối đầu."""
+    if freeze_blocks <= 0:
+        return []
+    return [model.stem, model.elo_encoder, *model.blocks[:freeze_blocks]]
+
+
+def set_train_mode(model: EloConditionedPolicyNet, freeze_blocks: int) -> None:
+    """``model.train()`` nhưng BatchNorm của phần đóng băng vẫn ở chế độ eval.
+
+    Không làm vậy thì running mean/var của các lớp đó vẫn trôi theo dữ liệu của một kỳ thủ, dù trọng số
+    không đổi, và đặc trưng mà các khối sau nhận được sẽ lệch khỏi thứ chúng được fine-tune trên đó.
+    """
+    model.train()
+    for module in frozen_modules(model, freeze_blocks):
+        module.eval()
+
+
 def save_checkpoint(
     path: Path,
     model: EloConditionedPolicyNet,
@@ -234,12 +261,30 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
     val_loader = DataLoader(val_set, batch_size=cfg.batch_size, shuffle=False,
                             num_workers=min(2, cfg.num_workers), collate_fn=collate)
 
+    base_state = None
+    if cfg.init_from and not (resume and resume.exists()):
+        base_state = torch.load(cfg.init_from, map_location="cpu", weights_only=False)
+        # Kiến trúc phải đúng như mô hình nền, bất kể phần model: trong file cấu hình.
+        cfg.model = ModelConfig(**base_state["model_config"])
+
     model = EloConditionedPolicyNet(cfg.model).to(device)
     LOGGER.info("Mô hình %s · %.2fM tham số",
                 cfg.model.name, model.parameter_count() / 1e6)
+    if base_state is not None:
+        model.load_state_dict(base_state["model"])
+        LOGGER.info("Khởi tạo từ %s (bước %s của mô hình nền)", cfg.init_from, base_state.get("step"))
+
+    for module in frozen_modules(model, cfg.freeze_blocks):
+        for parameter in module.parameters():
+            parameter.requires_grad_(False)
+    trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    if cfg.freeze_blocks:
+        LOGGER.info("Đóng băng stem, bộ mã hóa Elo và %d khối đầu · còn %.2fM tham số được học",
+                    cfg.freeze_blocks, sum(p.numel() for p in trainable) / 1e6)
+    set_train_mode(model, cfg.freeze_blocks)
 
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
+        trainable, lr=cfg.lr, weight_decay=cfg.weight_decay
     )
     use_amp = cfg.amp and device.type == "cuda"
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
@@ -263,6 +308,16 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
     started = time.time()
     running_loss = 0.0
     running_n = 0
+
+    if base_state is not None:
+        metrics = evaluate(model, val_loader, device, cfg.eval_batches)
+        set_train_mode(model, cfg.freeze_blocks)
+        metrics.update({"step": 0, "epoch": 0, "lr": 0.0, "baseline": True})
+        LOGGER.info("MÔ HÌNH NỀN trên tập val · top1 %.4f · top3 %.4f · loss %.4f",
+                    metrics["top1"], metrics["top3"], metrics["loss"])
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(metrics) + "\n")
+        best_val_loss = metrics["loss"]
 
     for epoch in range(start_epoch, cfg.epochs):
         train_set.set_epoch(epoch)
@@ -315,6 +370,7 @@ def train(cfg: TrainConfig, resume: Path | None = None) -> Path:
 
             if step % cfg.eval_every == 0:
                 metrics = evaluate(model, val_loader, device, cfg.eval_batches)
+                set_train_mode(model, cfg.freeze_blocks)
                 metrics.update({"step": step, "epoch": epoch, "lr": lr})
                 LOGGER.info(
                     "ĐÁNH GIÁ bước %d · top1 %.4f · top3 %.4f · elo_sep %+.4f · loss %.4f",

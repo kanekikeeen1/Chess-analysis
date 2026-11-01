@@ -1,0 +1,4 @@
+player,games,positions,meets_target,first_date,last_date,games_bullet,games_blitz,games_rapid,games_classical,games_correspondence,games_unknown,chesscom,lichess,broadcast,otb,duplicates_removed
+liem,6863,305945,True,2013.09.19,2026.10.20,2187,4040,517,115,4,0,3693,2757,413,0,206
+carlsen,22218,976080,True,2014.12.14,2026.10.31,13488,7820,431,479,0,0,9639,11595,984,0,503
+hikaru,68937,2990702,True,2014.01.06,2026.10.31,20729,46811,851,375,171,0,68344,0,593,0,722

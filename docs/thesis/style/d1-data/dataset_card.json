@@ -1,0 +1,182 @@
+{
+  "description": "Ván công khai của từng kỳ thủ cho giai đoạn D (mô hình theo phong cách).",
+  "sources": {
+    "chesscom": "Chess.com Published-Data API (api.chess.com/pub)",
+    "lichess": "Lichess API /api/games/user",
+    "broadcast": "Lichess broadcast database, CC0 (database.lichess.org/broadcast)",
+    "otb": "File PGN tải tay (TWIC, PGN Mentor…)"
+  },
+  "filters": {
+    "min_plies": 20,
+    "variant": "chỉ cờ tiêu chuẩn từ thế ban đầu",
+    "result": "chỉ ván đã có kết quả",
+    "dedupe": "cùng kỳ thủ + cùng màu + cùng chuỗi nước đi",
+    "chess960_events": "loại theo tên giải (960, 9LX, Fischer Random, Freestyle)",
+    "truncated": "ván có nước lỗi (bàn DGT) giữ phần trước nước lỗi nếu còn ≥ min_plies"
+  },
+  "target_games": 3000,
+  "players": {
+    "liem": {
+      "display_name": "Lê Quang Liêm",
+      "games": 6863,
+      "positions": 305945,
+      "meets_target": true,
+      "first_date": "2013.09.19",
+      "last_date": "2026.10.20",
+      "by_source": {
+        "chesscom": 3693,
+        "lichess": 2757,
+        "broadcast": 413
+      },
+      "by_speed": {
+        "bullet": 2187,
+        "blitz": 4040,
+        "rapid": 517,
+        "classical": 115,
+        "correspondence": 4
+      },
+      "positions_by_speed": {
+        "bullet": 92927,
+        "blitz": 181593,
+        "rapid": 25631,
+        "classical": 5676,
+        "correspondence": 118
+      },
+      "by_color": {
+        "black": 3430,
+        "white": 3433
+      },
+      "by_year": {
+        "2013": 17,
+        "2014": 132,
+        "2015": 142,
+        "2016": 351,
+        "2017": 154,
+        "2018": 160,
+        "2019": 107,
+        "2020": 3223,
+        "2021": 413,
+        "2022": 320,
+        "2023": 309,
+        "2024": 409,
+        "2025": 519,
+        "2026": 574,
+        "unknown": 33
+      },
+      "duplicates_removed": 206,
+      "truncated_kept": 4,
+      "rejected": {
+        "variant": 509,
+        "too_short": 43,
+        "unfinished": 8,
+        "custom_start": 7
+      }
+    },
+    "carlsen": {
+      "display_name": "Magnus Carlsen",
+      "games": 22218,
+      "positions": 976080,
+      "meets_target": true,
+      "first_date": "2014.12.14",
+      "last_date": "2026.10.31",
+      "by_source": {
+        "lichess": 11595,
+        "chesscom": 9639,
+        "broadcast": 984
+      },
+      "by_speed": {
+        "bullet": 13488,
+        "blitz": 7820,
+        "rapid": 431,
+        "classical": 479
+      },
+      "positions_by_speed": {
+        "bullet": 575400,
+        "blitz": 356055,
+        "rapid": 21942,
+        "classical": 22683
+      },
+      "by_color": {
+        "white": 11142,
+        "black": 11076
+      },
+      "by_year": {
+        "2014": 11,
+        "2016": 65,
+        "2017": 284,
+        "2018": 1301,
+        "2019": 1172,
+        "2020": 5608,
+        "2021": 3166,
+        "2022": 1670,
+        "2023": 3060,
+        "2024": 2165,
+        "2025": 2384,
+        "2026": 1287,
+        "unknown": 45
+      },
+      "duplicates_removed": 503,
+      "truncated_kept": 3,
+      "rejected": {
+        "variant": 1258,
+        "too_short": 125,
+        "unfinished": 24,
+        "custom_start": 8
+      }
+    },
+    "hikaru": {
+      "display_name": "Hikaru Nakamura",
+      "games": 68937,
+      "positions": 2990702,
+      "meets_target": true,
+      "first_date": "2014.01.06",
+      "last_date": "2026.10.31",
+      "by_source": {
+        "chesscom": 68344,
+        "broadcast": 593
+      },
+      "by_speed": {
+        "bullet": 20729,
+        "blitz": 46811,
+        "rapid": 851,
+        "classical": 375,
+        "correspondence": 171
+      },
+      "positions_by_speed": {
+        "bullet": 835995,
+        "blitz": 2090916,
+        "rapid": 40603,
+        "classical": 17688,
+        "correspondence": 5500
+      },
+      "by_color": {
+        "white": 34411,
+        "black": 34526
+      },
+      "by_year": {
+        "2014": 1741,
+        "2015": 3008,
+        "2016": 5548,
+        "2017": 5224,
+        "2018": 4715,
+        "2019": 6357,
+        "2020": 8366,
+        "2021": 5160,
+        "2022": 3236,
+        "2023": 6910,
+        "2024": 7575,
+        "2025": 6046,
+        "2026": 5023,
+        "unknown": 28
+      },
+      "duplicates_removed": 722,
+      "truncated_kept": 10,
+      "rejected": {
+        "variant": 1786,
+        "custom_start": 962,
+        "too_short": 475,
+        "unfinished": 22
+      }
+    }
+  }
+}

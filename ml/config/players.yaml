@@ -1,0 +1,49 @@
+# Kỳ thủ cho giai đoạn D (mô hình theo phong cách). Dùng bởi scripts/collect_player_games.py.
+#
+# Nhận diện một ván là của ai:
+#   - fide_id: so với tag WhiteFideId / BlackFideId (Lichess broadcast có tag này với giải lớn).
+#   - names:   so theo TẬP TỪ sau khi bỏ dấu, viết thường, bỏ dấu câu và danh hiệu (GM, IM…):
+#              "Carlsen, Magnus" = "Magnus Carlsen"; "Lê Quang Liêm" = "Le, Quang Liem".
+#              So khớp nguyên tập chứ không chứa: "Carlsen, Henrik" (bố của Magnus) không bị nhận nhầm.
+#   - chesscom / lichess: tài khoản công khai; bên nào mang tên tài khoản là bên của kỳ thủ.
+#
+# Các tài khoản dưới đây đã kiểm tra qua API (danh hiệu, tên thật, số ván) ngày 2026-11-01.
+# Tài khoản không tồn tại hoặc đã đóng thì script chỉ cảnh báo rồi bỏ qua.
+
+players:
+  liem:
+    display_name: Lê Quang Liêm
+    fide_id: "12401137"
+    names:
+      - Le, Quang Liem
+      - Le Quang Liem
+      - Le, Liem
+      - Liem Le
+    chesscom: [liemle]            # GM, tên "Liem Le"
+    lichess: [Liem_Chess]         # GM, tên "Liem Quang Le", ~2.800 ván
+
+  carlsen:
+    display_name: Magnus Carlsen
+    fide_id: "1503014"
+    names:
+      - Carlsen, Magnus
+      - Carlsen, M
+    chesscom: [MagnusCarlsen]
+    # Cả bốn đều mang danh hiệu GM; DannyTheDonkey ghi tên thật Magnus Carlsen. ~11.800 ván tổng cộng.
+    lichess: [DrNykterstein, DrDrunkenstein, DannyTheDonkey, manwithavan]
+
+  # Thay Daniil Dubov: Lichess "Duhless" chỉ có 9 ván, không có danh hiệu GM, không phải Dubov
+  # (kiểm tra qua /api/user ngày 2026-11-01).
+  hikaru:
+    display_name: Hikaru Nakamura
+    fide_id: "2016192"
+    names:
+      - Nakamura, Hikaru
+      - Nakamura, H
+    chesscom: [Hikaru]
+    # Trên Lichess, Nakamura chỉ có ván OTB phát trực tiếp: lichess.org/fide/2016192/Nakamura_Hikaru là
+    # trang hồ sơ FIDE liệt kê các ván đó, không phải tài khoản chơi. Lệnh `broadcast` đã lấy chúng qua
+    # fide_id ở trên (tag WhiteFideId/BlackFideId), nên không cần khai thêm gì.
+    # Tài khoản chơi: "Hikaru" đã đóng (API trả 404); "Hikaru_Nakamura" chỉ có 5 ván, không có danh hiệu,
+    # không phải anh ấy.
+    lichess: []

@@ -192,6 +192,38 @@ public class HumanMoveModel implements DisposableBean {
         return total;
     }
 
+    /**
+     * Thứ hạng (0 = nước mô hình cho xác suất cao nhất) của nước đã đi trong từng thế cờ, ở một mức Elo:
+     * dùng để đếm "bao nhiêu nước trùng lựa chọn của mô hình". Chạy theo lô như {@link #logLikelihood}.
+     */
+    public int[] playedRanks(List<PlayedMove> played, int elo) {
+        if (!available()) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, unavailableReason);
+        }
+        int[] ranks = new int[played.size()];
+        for (int start = 0; start < played.size(); start += MAX_BATCH_ROWS) {
+            List<PlayedMove> chunk = played.subList(start, Math.min(played.size(), start + MAX_BATCH_ROWS));
+            List<float[]> planes = new ArrayList<>(chunk.size());
+            double[] elos = new double[chunk.size()];
+            for (int p = 0; p < chunk.size(); p++) {
+                planes.add(encoding.encode(chunk.get(p).board()));
+                elos[p] = elo;
+            }
+            float[][] logits = run(planes, elos);
+            for (int p = 0; p < chunk.size(); p++) {
+                PlayedMove move = chunk.get(p);
+                Side mover = move.board().getSideToMove();
+                float playedLogit = logits[p][encoding.moveIndex(move.move(), mover)];
+                int rank = 0;
+                for (Move legal : move.board().legalMoves()) {
+                    if (logits[p][encoding.moveIndex(legal, mover)] > playedLogit) rank++;
+                }
+                ranks[start + p] = rank;
+            }
+        }
+        return ranks;
+    }
+
     private float[][] run(Board board, List<Integer> elos) {
         float[] single = encoding.encode(board);
         List<float[]> planes = new ArrayList<>(elos.size());
@@ -268,7 +300,8 @@ public class HumanMoveModel implements DisposableBean {
         return moves;
     }
 
-    private static String san(Board board, Move move) {
+    /** SAN của một nước hợp lệ; nếu chesslib không đổi được thì trả UCI. */
+    public static String san(Board board, Move move) {
         try {
             MoveList list = new MoveList(board.getFen());
             list.add(move);

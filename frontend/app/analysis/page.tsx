@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Crown,
   Cpu,
   GitBranch,
   History,
@@ -78,14 +79,17 @@ import {
 import { MoveHistory } from "@/components/analysis/move-history";
 import { HumanMovesPanel } from "@/components/analysis/human-moves-panel";
 import { GameEloCard } from "@/components/analysis/game-elo-card";
+import { StyleMatchCard } from "@/components/analysis/style-match-card";
+import { StyleMovesPanel } from "@/components/analysis/style-moves-panel";
 import { IMPORT_PGN_KEY } from "@/lib/human-moves";
 import { EvaluationBar, NavButton } from "@/components/analysis/board-controls";
 
-type SideTab = "engine" | "human" | "report" | "load";
+type SideTab = "engine" | "human" | "styles" | "report" | "load";
 
 const SIDE_TABS: Array<{ id: SideTab; label: string; icon: typeof Cpu }> = [
   { id: "engine", label: "Engine", icon: Cpu },
   { id: "human", label: "Theo Elo", icon: Users },
+  { id: "styles", label: "Kiện tướng", icon: Crown },
   { id: "report", label: "Báo cáo", icon: ClipboardList },
   { id: "load", label: "Nạp ván", icon: Upload },
 ];
@@ -1026,7 +1030,7 @@ export default function AnalysisPage() {
             <h1 className="text-center text-2xl font-semibold tracking-tight">Game Analysis</h1>
           </div>
 
-          <div className="grid shrink-0 grid-cols-4 border-b border-white/10 bg-[#171c1a]" role="tablist" aria-label="Khu vực phân tích">
+          <div className="grid shrink-0 grid-cols-5 border-b border-white/10 bg-[#171c1a]" role="tablist" aria-label="Khu vực phân tích">
             {SIDE_TABS.map(({ icon: Icon, id, label }) => {
               const active = sideTab === id;
               return (
@@ -1121,7 +1125,10 @@ export default function AnalysisPage() {
                 reviewTotal={reviewTotal}
               />
               {reviewComplete && reviewedMoves.length > 0 && (
-                <GameEloCard moves={reviewedMoves} playerNames={playerNames} />
+                <>
+                  <GameEloCard moves={reviewedMoves} playerNames={playerNames} />
+                  <StyleMatchCard moves={reviewedMoves} playerNames={playerNames} />
+                </>
               )}
               {reviewComplete && (
                 <section className="border-b border-white/10 bg-[#202623] px-3 py-3">
@@ -1169,6 +1176,15 @@ export default function AnalysisPage() {
 
           {sideTab === "human" && (
             <HumanMovesPanel
+              fen={currentFen}
+              gameOver={currentGame.isGameOver()}
+              onPlayMove={playHumanMove}
+              playedUci={uciMoves[currentIndex] ?? null}
+            />
+          )}
+
+          {sideTab === "styles" && (
+            <StyleMovesPanel
               fen={currentFen}
               gameOver={currentGame.isGameOver()}
               onPlayMove={playHumanMove}

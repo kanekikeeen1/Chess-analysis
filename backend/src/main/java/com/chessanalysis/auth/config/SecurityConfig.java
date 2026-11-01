@@ -70,6 +70,8 @@ public class SecurityConfig {
                                 "/api/human-moves",
                                 "/api/human-moves/**",
                                 "/api/profile/**",
+                                "/api/styles",
+                                "/api/styles/**",
                                 "/actuator/health",
                                 "/error").permitAll()
                         .anyRequest().denyAll())

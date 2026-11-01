@@ -1,0 +1,41 @@
+# D3 phương án hai tầng, tầng giữa: "GM chung" = M2 nền fine-tune trên ván gộp của cả ba kỳ thủ.
+#
+#   python scripts/prepare_style_data.py --pool-only      # dựng data/style/pool (mỗi người ≤ 300k vị trí)
+#   python -m m2.train --config config/style-pool.yaml
+#
+# Vì sao cần: ở phương án một (style-*.yaml), mô hình Nakamura học trên 1,6M vị trí, gấp 10 lần Liêm, nên
+# đoán ván của Liêm còn tốt hơn chính mô hình Liêm — nó giỏi "blitz kiện tướng nói chung" hơn chứ không bắt
+# được phong cách Liêm. Tầng này đưa phần kiến thức chung đó cho cả ba; tầng sau (style2-*.yaml) chỉ còn học
+# phần riêng của từng người, và D4 dùng mô hình này làm cột đối chứng.
+# Dữ liệu ~757k vị trí (Liêm 157k + Carlsen 300k + Nakamura 300k) → 1.479 bước/epoch, 5 epoch ≈ 7.400 bước.
+
+data_dir: data/style/pool
+run_dir: runs/style-pool
+init_from: runs/m2-rtx5060ti-v2/best.pt
+freeze_blocks: 4
+
+batch_size: 512
+epochs: 5
+lr: 0.0003
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 300
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 8
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 300
+eval_batches: 60
+log_every: 100
+save_every: 1500
+val_rows: 30000
+early_stop_patience: 6
+
+amp: true
+seed: 1337
+max_steps: null

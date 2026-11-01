@@ -1,0 +1,40 @@
+# D3 phương án hai tầng, tầng cuối: fine-tune GM chung (style-pool.yaml) theo phong cách Lê Quang Liêm.
+#
+#   python -m m2.train --config config/style2-liem.yaml
+#
+# Chung cho ba file style2-*.yaml (chỉ khác dữ liệu, số epoch và nhịp đánh giá):
+# - Khởi tạo từ runs/style-pool/best.pt (GM chung), đóng băng 4/10 khối đầu, lr 2e-4.
+# - Bước 0 đo chính mô hình GM chung trên val của kỳ thủ; dừng sớm khi loss val không giảm sau 6 lần đánh giá,
+#   tính cả mốc bước 0, nên nếu fine-tune không giúp gì thì nó dừng ngay.
+# - Số epoch chọn để mỗi người có khoảng 4.000–9.000 bước: Liêm chỉ 157k vị trí train (307 bước/epoch).
+
+data_dir: data/style/liem
+run_dir: runs/style2-liem
+init_from: runs/style-pool/best.pt
+freeze_blocks: 4
+
+batch_size: 512
+epochs: 12
+lr: 0.0002
+min_lr: 0.00001
+weight_decay: 0.0001
+warmup_steps: 150
+grad_clip: 1.0
+
+value_loss_weight: 0.15
+label_smoothing: 0.02
+
+num_workers: 8
+shuffle_buffer: 50000
+prefetch_factor: 4
+
+eval_every: 100
+eval_batches: 40
+log_every: 50
+save_every: 1000
+val_rows: 20000
+early_stop_patience: 6
+
+amp: true
+seed: 1337
+max_steps: null

@@ -47,6 +47,10 @@ app:
   # backend; thiếu file thì backend vẫn chạy, chỉ /api/human-moves trả 503.
   human-moves:
     model-path: ${M2_MODEL_PATH:../ml/models/m2.onnx}
+  # Mô hình theo phong cách kỳ thủ (giai đoạn D) do ml/scripts/export_style_models.py xuất ra: styles.json,
+  # <id>.onnx và <id>.book.json. Thiếu thư mục thì backend vẫn chạy, chỉ /api/styles báo chưa có mô hình.
+  styles:
+    dir: ${STYLE_MODELS_DIR:../ml/models/styles}
   # Tiêu chí lọc khi import Lichess Puzzle Database. Import chỉ chạy khi có tham số
   # --app.puzzles.import-file=<đường dẫn tới lichess_db_puzzle.csv.zst>.
   puzzles:

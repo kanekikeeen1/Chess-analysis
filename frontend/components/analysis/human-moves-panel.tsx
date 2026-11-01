@@ -81,12 +81,12 @@ function buildRows(data: HumanMoveResponse, moverIsWhite: boolean): Row[] {
   });
 }
 
-function percent(probability: number) {
+export function percent(probability: number) {
   if (probability > 0 && probability < 0.01) return "<1%";
   return `${Math.round(probability * 100)}%`;
 }
 
-function lossTone(loss: number | null) {
+export function lossTone(loss: number | null) {
   if (loss === null) return "bg-[#3a413e] text-[#c5cec7]";
   if (loss >= TRAP_LOSS) return "bg-[#ef6461]/18 text-[#ffaaa8]";
   if (loss >= 0.8) return "bg-[#d8b45f]/18 text-[#f0d994]";

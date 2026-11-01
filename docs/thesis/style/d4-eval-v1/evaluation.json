@@ -1,0 +1,358 @@
+{
+  "players": [
+    "liem",
+    "carlsen",
+    "hikaru"
+  ],
+  "checkpoints": {
+    "base": "runs\\m2-rtx5060ti-v2\\best.pt",
+    "liem": "runs\\style-liem\\best.pt",
+    "carlsen": "runs\\style-carlsen\\best.pt",
+    "hikaru": "runs\\style-hikaru\\best.pt"
+  },
+  "accuracy": {
+    "liem": {
+      "base": {
+        "n": 20763,
+        "top1": 0.33371863410875113,
+        "top3": 0.6148437123729712,
+        "nll": 2.261125087738037
+      },
+      "liem": {
+        "n": 20763,
+        "top1": 0.38587872658093725,
+        "top3": 0.6672446178297934,
+        "nll": 2.0314812660217285
+      },
+      "carlsen": {
+        "n": 20763,
+        "top1": 0.3876125800703174,
+        "top3": 0.6737465684149689,
+        "nll": 2.0155789852142334
+      },
+      "hikaru": {
+        "n": 20763,
+        "top1": 0.40167605837306747,
+        "top3": 0.6907479651302798,
+        "nll": 1.9212102890014648
+      }
+    },
+    "carlsen": {
+      "base": {
+        "n": 34382,
+        "top1": 0.33502995753591996,
+        "top3": 0.6058402652550753,
+        "nll": 2.258222818374634
+      },
+      "liem": {
+        "n": 34382,
+        "top1": 0.3831365249258333,
+        "top3": 0.6662206968762725,
+        "nll": 2.0340840816497803
+      },
+      "carlsen": {
+        "n": 34382,
+        "top1": 0.40384503519283343,
+        "top3": 0.6871328020475831,
+        "nll": 1.9576208591461182
+      },
+      "hikaru": {
+        "n": 34382,
+        "top1": 0.40707346867546973,
+        "top3": 0.6980396719213542,
+        "nll": 1.8915342092514038
+      }
+    },
+    "hikaru": {
+      "base": {
+        "n": 188827,
+        "top1": 0.3267011603213523,
+        "top3": 0.5947560465399545,
+        "nll": 2.3062684535980225
+      },
+      "liem": {
+        "n": 188827,
+        "top1": 0.36889851557245523,
+        "top3": 0.6504578264760866,
+        "nll": 2.0948891639709473
+      },
+      "carlsen": {
+        "n": 188827,
+        "top1": 0.3806129420051158,
+        "top3": 0.6672827508777877,
+        "nll": 2.045079231262207
+      },
+      "hikaru": {
+        "n": 188827,
+        "top1": 0.4165029365503874,
+        "top3": 0.7023307048250516,
+        "nll": 1.8709913492202759
+      }
+    }
+  },
+  "diagonalWins": {
+    "liem": false,
+    "carlsen": false,
+    "hikaru": true
+  },
+  "diagonalVsOthers": {
+    "liem": {
+      "base": {
+        "diff": 0.0521600924721861,
+        "ci95": [
+          0.04687639887135199,
+          0.05768409043492037
+        ],
+        "significant": true
+      },
+      "carlsen": {
+        "diff": -0.0017338534893801473,
+        "ci95": [
+          -0.006428880110368257,
+          0.0028073756313077174
+        ],
+        "significant": false
+      },
+      "hikaru": {
+        "diff": -0.01579733179213023,
+        "ci95": [
+          -0.021102248860700386,
+          -0.010504761790900562
+        ],
+        "significant": true
+      }
+    },
+    "carlsen": {
+      "base": {
+        "diff": 0.0688150776569135,
+        "ci95": [
+          0.06456073128945213,
+          0.0730653962669114
+        ],
+        "significant": true
+      },
+      "liem": {
+        "diff": 0.020708510267000175,
+        "ci95": [
+          0.016714004359652847,
+          0.024670134534205336
+        ],
+        "significant": true
+      },
+      "hikaru": {
+        "diff": -0.003228433482636263,
+        "ci95": [
+          -0.007001113565501097,
+          0.0004308276979840684
+        ],
+        "significant": false
+      }
+    },
+    "hikaru": {
+      "base": {
+        "diff": 0.08980177622903504,
+        "ci95": [
+          0.08785594050777344,
+          0.091854919295624
+        ],
+        "significant": true
+      },
+      "liem": {
+        "diff": 0.04760442097793218,
+        "ci95": [
+          0.04572891701408152,
+          0.049424277134132166
+        ],
+        "significant": true
+      },
+      "carlsen": {
+        "diff": 0.0358899945452716,
+        "ci95": [
+          0.034055943395788324,
+          0.03762324454311493
+        ],
+        "significant": true
+      }
+    }
+  },
+  "testGames": {
+    "liem": 467,
+    "carlsen": 873,
+    "hikaru": 4804
+  },
+  "identification": {
+    "raw": {
+      "1": {
+        "accuracy": {
+          "liem": 0.13276231263383298,
+          "carlsen": 0.2542955326460481,
+          "hikaru": 0.9073688592839301
+        },
+        "macroAccuracy": 0.43147556818793703,
+        "confusion": {
+          "liem": {
+            "hikaru": 337,
+            "carlsen": 68,
+            "liem": 62
+          },
+          "carlsen": {
+            "hikaru": 594,
+            "carlsen": 222,
+            "liem": 57
+          },
+          "hikaru": {
+            "hikaru": 4359,
+            "liem": 131,
+            "carlsen": 314
+          }
+        }
+      },
+      "5": {
+        "accuracy": {
+          "liem": 0.0075,
+          "carlsen": 0.0865,
+          "hikaru": 1.0
+        },
+        "macroAccuracy": 0.3646666666666667,
+        "confusion": {
+          "liem": {
+            "hikaru": 1956,
+            "liem": 15,
+            "carlsen": 29
+          },
+          "carlsen": {
+            "hikaru": 1826,
+            "carlsen": 173,
+            "liem": 1
+          },
+          "hikaru": {
+            "hikaru": 2000
+          }
+        }
+      },
+      "10": {
+        "accuracy": {
+          "liem": 0.0,
+          "carlsen": 0.025,
+          "hikaru": 1.0
+        },
+        "macroAccuracy": 0.3416666666666666,
+        "confusion": {
+          "liem": {
+            "hikaru": 1995,
+            "carlsen": 5
+          },
+          "carlsen": {
+            "hikaru": 1950,
+            "carlsen": 50
+          },
+          "hikaru": {
+            "hikaru": 2000
+          }
+        }
+      }
+    },
+    "calibrated": {
+      "1": {
+        "accuracy": {
+          "liem": 0.49036402569593146,
+          "carlsen": 0.5189003436426117,
+          "hikaru": 0.5395503746877602
+        },
+        "macroAccuracy": 0.5162715813421012,
+        "confusion": {
+          "liem": {
+            "carlsen": 147,
+            "liem": 229,
+            "hikaru": 91
+          },
+          "carlsen": {
+            "liem": 246,
+            "hikaru": 174,
+            "carlsen": 453
+          },
+          "hikaru": {
+            "carlsen": 1164,
+            "hikaru": 2592,
+            "liem": 1048
+          }
+        }
+      },
+      "5": {
+        "accuracy": {
+          "liem": 0.6425,
+          "carlsen": 0.731,
+          "hikaru": 0.772
+        },
+        "macroAccuracy": 0.7151666666666667,
+        "confusion": {
+          "liem": {
+            "carlsen": 540,
+            "liem": 1285,
+            "hikaru": 175
+          },
+          "carlsen": {
+            "carlsen": 1462,
+            "liem": 383,
+            "hikaru": 155
+          },
+          "hikaru": {
+            "hikaru": 1544,
+            "carlsen": 256,
+            "liem": 200
+          }
+        }
+      },
+      "10": {
+        "accuracy": {
+          "liem": 0.7335,
+          "carlsen": 0.8645,
+          "hikaru": 0.8875
+        },
+        "macroAccuracy": 0.8285,
+        "confusion": {
+          "liem": {
+            "liem": 1467,
+            "hikaru": 93,
+            "carlsen": 440
+          },
+          "carlsen": {
+            "carlsen": 1729,
+            "liem": 217,
+            "hikaru": 54
+          },
+          "hikaru": {
+            "hikaru": 1775,
+            "carlsen": 145,
+            "liem": 80
+          }
+        }
+      }
+    },
+    "bias": {
+      "liem": -2.0613699754079184,
+      "carlsen": -2.0237567822138467,
+      "hikaru": -1.9014081954956055
+    }
+  },
+  "stockfish": {
+    "liem": {
+      "n": 500,
+      "depth": 12,
+      "top1": 0.496,
+      "top3": 0.784
+    },
+    "carlsen": {
+      "n": 500,
+      "depth": 12,
+      "top1": 0.526,
+      "top3": 0.804
+    },
+    "hikaru": {
+      "n": 500,
+      "depth": 12,
+      "top1": 0.472,
+      "top3": 0.762
+    }
+  }
+}

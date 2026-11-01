@@ -1,0 +1,129 @@
+{
+  "config": {
+    "val_ratio": 0.05,
+    "test_ratio": 0.1,
+    "speeds": [
+      "blitz",
+      "rapid",
+      "classical"
+    ],
+    "skip_opening_plies": 10,
+    "min_game_plies": 20,
+    "max_plies_per_game": 300,
+    "drop_forced_moves": true,
+    "drop_time_forfeit_last_move": true,
+    "rows_per_shard": 100000
+  },
+  "players": {
+    "liem": {
+      "excluded_by_speed": 2191,
+      "removed_from_train_shared_with_heldout": 4,
+      "train": {
+        "games": 3967,
+        "positions": 157253,
+        "first_date": "2013.09.19",
+        "last_date": "2025.08.18",
+        "by_speed": {
+          "blitz": 3411,
+          "rapid": 463,
+          "classical": 93
+        }
+      },
+      "val": {
+        "games": 234,
+        "positions": 9657,
+        "first_date": "2025.08.18",
+        "last_date": "2026.05.12",
+        "by_speed": {
+          "blitz": 214,
+          "classical": 14,
+          "rapid": 6
+        }
+      },
+      "test": {
+        "games": 467,
+        "positions": 20763,
+        "first_date": "2026.05.12",
+        "last_date": "2026.10.20",
+        "by_speed": {
+          "blitz": 411,
+          "rapid": 48,
+          "classical": 8
+        }
+      }
+    },
+    "carlsen": {
+      "excluded_by_speed": 13488,
+      "removed_from_train_shared_with_heldout": 36,
+      "train": {
+        "games": 7385,
+        "positions": 300872,
+        "first_date": "2014.12.14",
+        "last_date": "2025.10.21",
+        "by_speed": {
+          "blitz": 6574,
+          "classical": 450,
+          "rapid": 361
+        }
+      },
+      "val": {
+        "games": 436,
+        "positions": 17799,
+        "first_date": "2025.10.21",
+        "last_date": "2026.01.19",
+        "by_speed": {
+          "blitz": 435,
+          "classical": 1
+        }
+      },
+      "test": {
+        "games": 873,
+        "positions": 34382,
+        "first_date": "2026.01.19",
+        "last_date": "2026.10.31",
+        "by_speed": {
+          "blitz": 796,
+          "rapid": 53,
+          "classical": 24
+        }
+      }
+    },
+    "hikaru": {
+      "excluded_by_speed": 20900,
+      "removed_from_train_shared_with_heldout": 0,
+      "train": {
+        "games": 40831,
+        "positions": 1611710,
+        "first_date": "2014.01.06",
+        "last_date": "2025.01.28",
+        "by_speed": {
+          "blitz": 39747,
+          "rapid": 746,
+          "classical": 338
+        }
+      },
+      "val": {
+        "games": 2402,
+        "positions": 94111,
+        "first_date": "2025.01.28",
+        "last_date": "2025.08.18",
+        "by_speed": {
+          "blitz": 2321,
+          "rapid": 64,
+          "classical": 17
+        }
+      },
+      "test": {
+        "games": 4804,
+        "positions": 188827,
+        "first_date": "2025.08.18",
+        "last_date": "2026.10.29",
+        "by_speed": {
+          "blitz": 4743,
+          "rapid": 41,
+          "classical": 20
+        }
+      }
+    }
+  }
+}

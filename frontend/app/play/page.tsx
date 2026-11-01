@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
-import { Bot, Flag, LoaderCircle, RotateCcw, ScanSearch, Swords, Undo2 } from "lucide-react";
+import { BookOpen, Bot, Crown, Flag, Gauge, LoaderCircle, RotateCcw, ScanSearch, Swords, Undo2 } from "lucide-react";
 
 import { useAuth } from "@/app/auth-provider";
 import {
@@ -13,6 +13,15 @@ import {
   type ScoredHumanMove,
   useHumanMoveLevels,
 } from "@/lib/human-moves";
+import {
+  fastShare,
+  fetchStyleMoves,
+  initials,
+  shortName,
+  styleDisclaimer,
+  type StyleSummary,
+  useStyles,
+} from "@/lib/styles";
 
 const PROMOTION_PIECES = [
   { piece: "q", label: "Hậu" }, { piece: "r", label: "Xe" },
@@ -25,7 +34,14 @@ const BOT_MIN_DELAY_MS = 450;
 
 type Side = "w" | "b";
 type Phase = "setup" | "playing" | "over";
-type BotThought = { chosen: ScoredHumanMove; considered: ScoredHumanMove[] };
+type OpponentKind = "gm" | "elo";
+type BotThought = {
+  chosen: ScoredHumanMove;
+  considered: ScoredHumanMove[];
+  /** Với kiện tướng: nước lấy từ sổ khai cuộc (ván thật) hay từ mô hình phong cách. */
+  source?: "book" | "model";
+  bookGames?: number | null;
+};
 
 function replay(moves: string[]) {
   const game = new Chess();
@@ -35,9 +51,9 @@ function replay(moves: string[]) {
   return game;
 }
 
-function describeOutcome(game: Chess, resigned: Side | null, userSide: Side) {
-  if (resigned) return resigned === userSide ? "Bạn đã xin thua." : "Bot xin thua.";
-  if (game.isCheckmate()) return game.turn() === userSide ? "Bot chiếu hết. Bạn thua." : "Chiếu hết! Bạn thắng.";
+function describeOutcome(game: Chess, resigned: Side | null, userSide: Side, botName: string) {
+  if (resigned) return resigned === userSide ? "Bạn đã xin thua." : `${botName} xin thua.`;
+  if (game.isCheckmate()) return game.turn() === userSide ? `${botName} chiếu hết. Bạn thua.` : "Chiếu hết! Bạn thắng.";
   if (game.isStalemate()) return "Hòa do hết nước đi (stalemate).";
   if (game.isThreefoldRepetition()) return "Hòa do lặp lại thế cờ ba lần.";
   if (game.isInsufficientMaterial()) return "Hòa do không đủ quân chiếu hết.";
@@ -55,6 +71,9 @@ function resultTag(game: Chess, resigned: Side | null) {
 export default function PlayPage() {
   const { user } = useAuth();
   const { error: levelsError, levels } = useHumanMoveLevels();
+  const { error: stylesError, styles } = useStyles();
+  const [opponentKind, setOpponentKind] = useState<OpponentKind>("gm");
+  const [styleId, setStyleId] = useState<string | null>(null);
   const [bucket, setBucket] = useState(3);
   const [colorChoice, setColorChoice] = useState<Side | "random">("w");
   const [userSide, setUserSide] = useState<Side>("w");
@@ -72,11 +91,16 @@ export default function PlayPage() {
   const turnTokenRef = useRef(0);
 
   const level = levels?.levels.find((item) => item.bucket === bucket) ?? null;
+  const gm: StyleSummary | null = styles?.styles.find((item) => item.id === styleId) ?? styles?.styles[0] ?? null;
+  // Đối thủ đang chọn: một kiện tướng (mô hình phong cách) hoặc một mức Elo (M2).
+  const opponentReady = opponentKind === "gm" ? Boolean(gm) : Boolean(level);
+  const opponentKey = opponentKind === "gm" ? `gm:${gm?.id ?? ""}` : `elo:${level?.center ?? ""}`;
+  const botName = opponentKind === "gm" && gm ? `Bot ${shortName(gm.displayName)}` : "Bot";
   const game = useMemo(() => replay(moves), [moves]);
   const fen = game.fen();
   const botSide: Side = userSide === "w" ? "b" : "w";
   const lastMove = game.history({ verbose: true }).at(-1);
-  const outcome = phase === "setup" ? "" : describeOutcome(game, resigned, userSide);
+  const outcome = phase === "setup" ? "" : describeOutcome(game, resigned, userSide, botName);
   const sanHistory = useMemo(() => game.history(), [game]);
 
   useEffect(() => {
@@ -84,22 +108,28 @@ export default function PlayPage() {
   }, [game, phase, resigned]);
 
   useEffect(() => {
-    if (phase !== "playing" || game.isGameOver() || game.turn() !== botSide || !level) return;
+    if (phase !== "playing" || game.isGameOver() || game.turn() !== botSide || !opponentReady) return;
     const token = ++turnTokenRef.current;
     const startedAt = Date.now();
     const plyBefore = moves.length;
     setBotThinking(true);
     setBotError("");
 
-    fetchHumanMoves(fen, [level.center], { topK: BOT_TOP_K })
+    const request: Promise<Omit<BotThought, "chosen">> = opponentKind === "gm" && gm
+      ? fetchStyleMoves(gm.id, fen, { topK: BOT_TOP_K })
+          .then((response) => ({ considered: response.moves, source: response.source, bookGames: response.bookGames }))
+      : fetchHumanMoves(fen, [level!.center], { topK: BOT_TOP_K })
+          .then((response) => ({ considered: response.predictions[0]?.moves ?? [] }));
+
+    request
       .then(async (response) => {
-        const considered = response.predictions[0]?.moves ?? [];
-        const chosen = sampleMove(considered);
+        // Rút ngẫu nhiên theo xác suất, kể cả trong sổ khai cuộc: kỳ thủ cũng không luôn đi cùng một nước.
+        const chosen = sampleMove(response.considered);
         if (!chosen) throw new Error("Mô hình không trả về nước nào.");
         const wait = BOT_MIN_DELAY_MS - (Date.now() - startedAt);
         if (wait > 0) await new Promise((resolve) => window.setTimeout(resolve, wait));
         if (token !== turnTokenRef.current) return;
-        setThought({ chosen, considered });
+        setThought({ ...response, chosen });
         setMoves((current) => (current.length === plyBefore ? [...current, chosen.uci] : current));
       })
       .catch((caught) => {
@@ -110,7 +140,7 @@ export default function PlayPage() {
         if (token === turnTokenRef.current) setBotThinking(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ chạy lại khi sang lượt mới
-  }, [fen, phase, botSide, level?.center, retry]);
+  }, [fen, phase, botSide, opponentKey, retry]);
 
   function startGame() {
     const side: Side = colorChoice === "random" ? (Math.random() < 0.5 ? "w" : "b") : colorChoice;
@@ -168,11 +198,13 @@ export default function PlayPage() {
 
   function analyseGame() {
     const exported = replay(moves);
-    const botName = `Bot M2 ${level?.label ?? ""}`.trim();
+    const opponentName = opponentKind === "gm" && gm
+      ? `Bot phong cách ${gm.displayName}`
+      : `Bot M2 ${level?.label ?? ""}`.trim();
     const userName = user?.username ?? "Bạn";
-    exported.setHeader("Event", "Đấu với bot M2");
-    exported.setHeader("White", userSide === "w" ? userName : botName);
-    exported.setHeader("Black", userSide === "b" ? userName : botName);
+    exported.setHeader("Event", opponentKind === "gm" && gm ? `Đấu với bot phong cách ${gm.displayName}` : "Đấu với bot M2");
+    exported.setHeader("White", userSide === "w" ? userName : opponentName);
+    exported.setHeader("Black", userSide === "b" ? userName : opponentName);
     exported.setHeader("Result", resultTag(game, resigned));
     try {
       window.sessionStorage.setItem(IMPORT_PGN_KEY, exported.pgn());
@@ -201,8 +233,8 @@ export default function PlayPage() {
   }, [game, lastMove, legalTargets, selectedSquare]);
 
   const status = phase === "setup"
-    ? "Chọn mức Elo và màu quân rồi bấm Bắt đầu."
-    : outcome || (botThinking ? "Bot đang nghĩ…" : game.turn() === userSide ? "Đến lượt bạn." : "Đến lượt bot.");
+    ? opponentKind === "gm" ? "Chọn kiện tướng và màu quân rồi bấm Bắt đầu." : "Chọn mức Elo và màu quân rồi bấm Bắt đầu."
+    : outcome || (botThinking ? `${botName} đang nghĩ…` : game.turn() === userSide ? "Đến lượt bạn." : `Đến lượt ${botName}.`);
 
   return (
     <main className="min-h-screen bg-[#111713] px-5 py-8 sm:px-8 lg:px-10">
@@ -211,10 +243,11 @@ export default function PlayPage() {
           <div className="flex items-center gap-3">
             <Swords className="size-7 text-[#d8b45f]" />
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight">Đấu với bot theo Elo</h1>
+              <h1 className="text-3xl font-semibold tracking-tight">Đấu với kiện tướng</h1>
               <p className="mt-1 text-sm text-[#aeb8b1]">
-                Bot đi như người ở mức Elo bạn chọn: mỗi nước được rút ngẫu nhiên theo xác suất của mô hình M2,
-                nên nó mắc cả những lỗi người ở mức đó hay mắc, thay vì luôn đi nước mạnh nhất.
+                Mỗi bot kiện tướng là một mô hình học cách chọn nước từ hàng nghìn ván công khai của chính người đó:
+                khai cuộc lấy từ repertoire thật, sau đó mỗi nước được rút theo xác suất người đó đi nước ấy. Hoặc đấu
+                với bot theo mức Elo (mô hình M2).
               </p>
             </div>
           </div>
@@ -261,8 +294,11 @@ export default function PlayPage() {
                 {botThinking ? <LoaderCircle className="mt-0.5 size-5 shrink-0 animate-spin" /> : <Bot className="mt-0.5 size-5 shrink-0 text-[#78a7ff]" />}
                 <div>
                   <p>{status}</p>
-                  {phase !== "setup" && level && (
-                    <p className="text-xs text-[#89958d]">Bot Elo {level.label} · bạn cầm {userSide === "w" ? "Trắng" : "Đen"}</p>
+                  {phase !== "setup" && opponentReady && (
+                    <p className="text-xs text-[#89958d]">
+                      {opponentKind === "gm" && gm ? `Phong cách ${gm.displayName}` : `Bot Elo ${level?.label}`}
+                      {" · "}bạn cầm {userSide === "w" ? "Trắng" : "Đen"}
+                    </p>
                   )}
                 </div>
               </div>
@@ -275,6 +311,20 @@ export default function PlayPage() {
 
               {phase === "setup" ? (
                 <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-1 rounded-xl bg-black/20 p-1" role="tablist" aria-label="Loại đối thủ">
+                    {([["gm", "Kiện tướng", Crown], ["elo", "Theo mức Elo", Gauge]] as const).map(([value, label, Icon]) => (
+                      <button key={value} type="button" role="tab" aria-selected={opponentKind === value} onClick={() => setOpponentKind(value)}
+                        className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${opponentKind === value ? "bg-[#4b7fe8] text-white" : "text-[#aeb8b1] hover:bg-white/8"}`}>
+                        <Icon className="size-4" /> {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {opponentKind === "gm" ? (
+                    <GrandmasterPicker error={stylesError} selectedId={gm?.id ?? null} onSelect={setStyleId}
+                      styles={styles?.styles ?? []} unavailableReason={styles && !styles.available ? styles.unavailableReason : null} />
+                  ) : (
+                  <>
                   {levelsError && <p className="text-sm text-[#ffaaa8]">{levelsError}</p>}
                   {levels && !levels.available && (
                     <p className="text-sm text-[#ffaaa8]">Backend chưa nạp mô hình M2: {levels.unavailableReason}</p>
@@ -290,6 +340,8 @@ export default function PlayPage() {
                       ))}
                     </div>
                   </div>
+                  </>
+                  )}
                   <div>
                     <p className="mb-2 text-xs uppercase tracking-wide text-[#89958d]">Bạn cầm</p>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -301,7 +353,7 @@ export default function PlayPage() {
                       ))}
                     </div>
                   </div>
-                  <button type="button" onClick={startGame} disabled={!level}
+                  <button type="button" onClick={startGame} disabled={!opponentReady}
                     className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#d8b45f] px-4 py-3 font-semibold text-[#172019] hover:bg-[#e3c87f] disabled:opacity-50">
                     <Swords className="size-4" /> Bắt đầu
                   </button>
@@ -334,7 +386,7 @@ export default function PlayPage() {
             {phase !== "setup" && (
               <div className="rounded-3xl border border-white/9 bg-[#1a211d] p-6 text-sm">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Bot vừa cân nhắc</h2>
+                  <h2 className="font-semibold">{botName} vừa cân nhắc</h2>
                   <label className="flex cursor-pointer items-center gap-1.5 text-xs text-[#89958d]">
                     <input type="checkbox" checked={showThoughts} onChange={(event) => setShowThoughts(event.target.checked)} className="accent-[#4b7fe8]" />
                     Hiện
@@ -344,6 +396,14 @@ export default function PlayPage() {
                   <p className="mt-2 text-xs text-[#89958d]">Đang ẩn để không lộ ý đồ của bot.</p>
                 ) : thought ? (
                   <ul className="mt-3 space-y-1">
+                    {thought.source && (
+                      <li className="mb-2 flex items-center gap-1.5 text-xs text-[#aeb8b1]">
+                        {thought.source === "book" ? <BookOpen className="size-3.5 text-[#d8b45f]" /> : <Bot className="size-3.5 text-[#78a7ff]" />}
+                        {thought.source === "book" && gm
+                          ? `Sổ khai cuộc: ${shortName(gm.displayName)} đã gặp thế này ${thought.bookGames ?? 0} lần; % là tần suất từng nước.`
+                          : "Mô hình phong cách: % là xác suất kỳ thủ đi nước đó."}
+                      </li>
+                    )}
                     {thought.considered.slice(0, 6).map((move) => {
                       const chosen = move.uci === thought.chosen.uci;
                       return (
@@ -357,13 +417,17 @@ export default function PlayPage() {
                       );
                     })}
                     <li className="pt-1 text-xs text-[#89958d]">
-                      Bot đã rút trúng {thought.chosen.san} ({(thought.chosen.probability * 100).toFixed(0)}%).
+                      {botName} đã rút trúng {thought.chosen.san} ({(thought.chosen.probability * 100).toFixed(0)}%).
                     </li>
                   </ul>
                 ) : (
-                  <p className="mt-2 text-xs text-[#89958d]">Bot chưa đi nước nào.</p>
+                  <p className="mt-2 text-xs text-[#89958d]">{botName} chưa đi nước nào.</p>
                 )}
               </div>
+            )}
+
+            {phase !== "setup" && opponentKind === "gm" && gm && (
+              <p className="px-2 text-xs leading-5 text-[#758078]">{styleDisclaimer(gm)}</p>
             )}
 
             {phase !== "setup" && sanHistory.length > 0 && (
@@ -384,5 +448,65 @@ export default function PlayPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function GrandmasterPicker({
+  error,
+  onSelect,
+  selectedId,
+  styles,
+  unavailableReason,
+}: {
+  error: string;
+  onSelect: (id: string) => void;
+  selectedId: string | null;
+  styles: StyleSummary[];
+  unavailableReason: string | null;
+}) {
+  if (error) return <p className="text-sm text-[#ffaaa8]">{error}</p>;
+  if (unavailableReason) return <p className="text-sm text-[#ffaaa8]">Backend chưa nạp mô hình kỳ thủ: {unavailableReason}</p>;
+  if (!styles.length) return <p className="text-sm text-[#89958d]">Đang tải danh sách kỳ thủ…</p>;
+
+  const selected = styles.find((style) => style.id === selectedId) ?? styles[0];
+  return (
+    <div>
+      <p className="mb-2 text-xs uppercase tracking-wide text-[#89958d]">Chọn kiện tướng</p>
+      <div className="grid gap-2" role="radiogroup" aria-label="Kiện tướng">
+        {styles.map((style) => {
+          const active = style.id === selected.id;
+          const fast = fastShare(style);
+          return (
+            <button key={style.id} type="button" role="radio" aria-checked={active} onClick={() => onSelect(style.id)}
+              className={`flex items-center gap-3 rounded-2xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4b7fe8] ${active ? "border-[#d8b45f]/70 bg-[#d8b45f]/10" : "border-white/8 bg-white/4 hover:bg-white/8"}`}>
+              <span className={`grid size-11 shrink-0 place-items-center rounded-full text-sm font-bold ${active ? "bg-[#d8b45f] text-[#172019]" : "bg-white/10 text-[#dce1db]"}`}>
+                {initials(style.displayName)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold text-white">{style.displayName}</span>
+                <span className="block text-xs text-[#aeb8b1]">
+                  {style.games.toLocaleString("vi-VN")} ván
+                  {style.firstYear && style.lastYear ? ` · ${style.firstYear}–${style.lastYear}` : ""}
+                  {fast !== null ? ` · ${Math.round(fast * 100)}% cờ nhanh` : ""}
+                </span>
+              </span>
+              {style.testTop1 !== null && (
+                <span className="shrink-0 text-right" title="Tỉ lệ đoán trúng nước kỳ thủ thật đi trên các ván mới nhất, chưa dùng khi huấn luyện">
+                  <span className="block text-sm font-bold tabular-nums text-white">{Math.round(style.testTop1 * 100)}%</span>
+                  <span className="block text-[10px] text-[#89958d]">đoán trúng</span>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-[#89958d]">
+        {styleDisclaimer(selected)}
+        {selected.testTop1 !== null && selected.baseTop1 !== null
+          ? ` Trên các ván mới nhất của ${shortName(selected.displayName)} (mô hình chưa thấy), bot đoán trúng `
+            + `${Math.round(selected.testTop1 * 100)}% nước thật, so với ${Math.round(selected.baseTop1 * 100)}% của mô hình M2 chung.`
+          : ""}
+      </p>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ package com.chessanalysis.auth.humanmove;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -52,22 +53,10 @@ public class HumanMoveService {
         List<List<HumanMove>> moves = model.predict(
                 board, request.elos(), request.topKOrDefault(), request.compareOrDefault());
 
-        Map<String, EngineVariationResponse> scores = Map.of();
-        String engineNote = null;
-        if (request.engineDepth() != null) {
-            Set<String> distinct = new LinkedHashSet<>();
-            moves.forEach(level -> level.forEach(move -> distinct.add(move.uci())));
-            try {
-                scores = score(fen, request.engineDepth(), List.copyOf(distinct));
-            } catch (EngineUnavailableException exception) {
-                engineNote = "Stockfish đang bận phân tích ván khác nên chưa chấm điểm các nước này.";
-            } catch (RuntimeException exception) {
-                // Mỗi lần đổi thế cờ đều gọi vào đây; in cả stack trace thì một lỗi cấu hình làm ngập log.
-                LOGGER.warn("Không chấm điểm được gợi ý M2 cho {}: {}", fen, exception.getMessage());
-                LOGGER.debug("Chi tiết lỗi Stockfish", exception);
-                engineNote = "Không chạy được Stockfish trên máy chủ (kiểm tra STOCKFISH_PATH).";
-            }
-        }
+        Set<String> distinct = new LinkedHashSet<>();
+        moves.forEach(level -> level.forEach(move -> distinct.add(move.uci())));
+        EngineScores engine = scoreMoves(fen, request.engineDepth(), distinct);
+        Map<String, EngineVariationResponse> scores = engine.byMove();
 
         M2Encoding encoding = model.encoding();
         List<HumanMoveResponse.LevelPrediction> predictions = new ArrayList<>(moves.size());
@@ -82,7 +71,28 @@ public class HumanMoveService {
             predictions.add(new HumanMoveResponse.LevelPrediction(
                     elo, encoding.bucketLabel(encoding.eloBucket(elo)), scored));
         }
-        return new HumanMoveResponse(fen, predictions, model.trainStep(), engineNote);
+        return new HumanMoveResponse(fen, predictions, model.trainStep(), engine.note());
+    }
+
+    /** Điểm Stockfish của các nước gợi ý; {@code note} giải thích khi không chấm được (không ném lỗi). */
+    public record EngineScores(Map<String, EngineVariationResponse> byMove, String note) {}
+
+    /**
+     * Chấm điểm {@code moves} ở thế {@code fen}. {@code depth = null} thì không chấm. Chấm điểm chỉ là phần thêm cho
+     * gợi ý, nên Stockfish bận hay lỗi thì trả về ghi chú thay vì làm hỏng cả request.
+     */
+    public EngineScores scoreMoves(String fen, Integer depth, Collection<String> moves) {
+        if (depth == null || moves.isEmpty()) return new EngineScores(Map.of(), null);
+        try {
+            return new EngineScores(score(fen, depth, List.copyOf(moves)), null);
+        } catch (EngineUnavailableException exception) {
+            return new EngineScores(Map.of(), "Stockfish đang bận phân tích ván khác nên chưa chấm điểm các nước này.");
+        } catch (RuntimeException exception) {
+            // Mỗi lần đổi thế cờ đều gọi vào đây; in cả stack trace thì một lỗi cấu hình làm ngập log.
+            LOGGER.warn("Không chấm điểm được gợi ý cho {}: {}", fen, exception.getMessage());
+            LOGGER.debug("Chi tiết lỗi Stockfish", exception);
+            return new EngineScores(Map.of(), "Không chạy được Stockfish trên máy chủ (kiểm tra STOCKFISH_PATH).");
+        }
     }
 
     private Map<String, EngineVariationResponse> score(String fen, int depth, List<String> moves) {

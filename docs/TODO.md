@@ -98,7 +98,10 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   ván cờ); trang `/play` đấu bot (lấy mẫu trong top-10, có "Đi lại", chuyển ván sang trang phân tích).
   Vòng 2: cột phải trang phân tích chia 4 tab (Engine · Theo Elo · Báo cáo · Nạp ván); panel M2 thành bảng so sánh (hàng = nước, cột = mức Elo, `compare=true` trả cùng tập nước cho mọi mức), có câu tóm tắt, cảnh báo bẫy, nước thực sự đi trong ván; hỏi mô hình trước rồi Stockfish sau, cache theo FEN, chỉ gọi khi mở tab. Còn: chạy thử trên giao diện.*
 
-## Giai đoạn D — Phong cách đại kiện tướng: Lê Quang Liêm, Magnus Carlsen, Daniil Dubov · ~8–12 ngày + GPU
+## Giai đoạn D — Phong cách đại kiện tướng: Lê Quang Liêm, Magnus Carlsen, Hikaru Nakamura · ~8–12 ngày + GPU
+
+> Ban đầu chọn Daniil Dubov, đổi sang Hikaru Nakamura (2026-11-01): Dubov không có tài khoản Lichess công khai
+> (Lichess "Duhless" chỉ 9 ván, không danh hiệu). Nakamura có kho ván Chess.com lớn nhất trong ba người.
 
 > **Mô hình học được gì và không học được gì**: mô hình học *cách chọn nước* của một người
 > từ các ván họ đã chơi, tức xác suất "người này sẽ đi nước nào ở thế cờ này". Nó không
@@ -112,25 +115,33 @@ và các bug nhỏ đã được bỏ khỏi lộ trình (xem cuối file).
   - Khử trùng lặp, chuẩn hóa tên ("Le, Quang Liem" / "Lê Quang Liêm"), chỉ giữ nước của đúng người đó.
   - Thống kê số ván và vị trí theo người × nhịp độ; ghi vào `dataset_card.json`.
   Xong khi: mỗi người có ≥ 3.000 ván (lý tưởng ≥ 10.000). Người nào thiếu thì ghi rõ trong báo cáo.
-- [ ] **D2 Chia tập chống rò rỉ**: chia **theo ván và theo thời gian** (test = các ván mới nhất), không chia theo nước.
+  *Code xong: `ml/style/collect.py`, `ml/scripts/collect_player_games.py` (chesscom · lichess · broadcast · scan · build), `ml/config/players.yaml` (tài khoản đã kiểm tra qua API), 6 test. Còn: chạy tải thật và build.*
+- [x] **D2 Chia tập chống rò rỉ**: chia **theo ván và theo thời gian** (test = các ván mới nhất), không chia theo nước.
+  *`scripts/prepare_style_data.py`: test = 10% ván mới nhất, val = 5% trước đó; bỏ khỏi train mọi ván thuộc val/test của bất kỳ ai (Carlsen mất 36 ván gặp Nakamura). Bỏ bullet như M2. Train: Liêm 157k · Carlsen 301k · Nakamura 1,61M vị trí (`docs/thesis/style/d2-split`).*
 - [ ] **D3 Fine-tune từ M2 nền** (mức 2600+)
+  *Code xong: `m2/train.py` thêm `init_from` + `freeze_blocks` (BatchNorm phần đóng băng giữ eval) + đo M2 nền  ở bước 0; `config/style-{liem,carlsen,hikaru}.yaml` (nền v2, đóng băng 4/10 khối, lr 3e-4). Còn: chạy train.*
   - Phương án chính: 3 mô hình fine-tune riêng; đóng băng các khối đầu; learning rate nhỏ; early stopping trên tập validation của chính người đó.
   - Cải tiến (nếu còn thời gian): 1 mô hình chung có **embedding kỳ thủ** đưa vào FiLM cạnh Elo, dùng chung tri thức nên ít dữ liệu vẫn học được.
   - Điều kiện hóa theo nhịp độ, vì blitz online của một người khác hẳn ván cổ điển của họ.
+  *Vòng 1 (`style-*.yaml`, nền v2): val top1 Liêm 34,6→39,6 · Carlsen 33,0→39,9 · Nakamura 31,9→40,9 (%). Đo thử D4 trên 2k dòng: đường chéo Liêm THUA mô hình Nakamura (dữ liệu gấp 10) → thêm phương án hai tầng nền → GM chung (`style-pool.yaml`, mỗi người ≤ 300k vị trí) → từng người (`style2-*.yaml`). Đã train xong cả hai vòng: GM chung val top1 40,4%; tầng cuối Liêm/Carlsen quá khớp ngay (dừng ở bước 600/1.200), Nakamura +1,8 điểm. Còn: vòng 3 đối chứng cùng 157k vị trí/người (`style3-*.yaml`).*
 - [ ] **D4 Đánh giá (chương thực nghiệm chính)**
   - Top-1/top-3 trên tập test của từng người, so với: M2 nền ở 2600+, Stockfish top-1, và mô hình của 2 người còn lại.
   - **Ma trận 3×3**: mô hình X dự đoán ván của Y — đường chéo phải trội hơn.
   - **Nhận diện phong cách**: từ 1 / 5 / 10 ván, đoán đúng ai là người chơi bao nhiêu %.
   Xong khi: mỗi mô hình vượt M2 nền trên ván của chính người đó, và đường chéo ma trận trội có ý nghĩa.
+  *Code xong: `scripts/evaluate_style.py` — top1/top3/NLL mọi mô hình × test mọi người, cột GM chung, Stockfish top-1 (500 vị trí/người), khoảng tin cậy 95% bootstrap theo ván cho đường chéo, nhận diện kỳ thủ từ 1/5/10 ván (thô và hiệu chỉnh theo val), 2 hình. Đã chạy vòng 1 và 2 (`docs/thesis/style/d4-eval-v1`, `d4-eval-v2`, nhận xét ở `NOTES.md`): mọi mô hình vượt M2 nền +5…+9 điểm (có ý nghĩa); đường chéo chỉ trội có ý nghĩa ở Nakamura, Liêm/Carlsen ngang GM chung; nhận diện từ 10 ván 82,8% (vòng 1) / 77,5% (vòng 2). Còn: vòng 3 đối chứng cùng lượng dữ liệu.*
 - [ ] **D5 Phục vụ**: xuất ONNX từng mô hình (hoặc 1 mô hình + id kỳ thủ); API `POST /api/human-moves {fen, style: "carlsen"}`.
+  *Code xong: `scripts/export_style_models.py` (ONNX + sổ khai cuộc 12 nửa nước đầu từ ván thật + `styles.json`), backend `humanmove/style` (`GET /api/styles`, `POST /api/styles/{id}/moves`: sổ trước, mô hình sau), 2 test. Đã xuất vòng 2 vào `ml/models/styles` (ONNX lệch ≤ 1,4e-5 so với PyTorch; sổ khai cuộc Liêm 1.520 · Carlsen 2.554 · Nakamura 9.253 thế cờ).*
 - [ ] **D6 Đưa vào web**
-  - Trang phân tích: chọn "Phong cách: Liêm / Carlsen / Dubov" → top-3 nước người đó có khả năng đi
+  - Trang phân tích: chọn "Phong cách: Liêm / Carlsen / Nakamura" → top-3 nước người đó có khả năng đi
     + xác suất + đánh giá Stockfish từng nước, để thấy nước "đúng phong cách" có tốt về mặt engine không.
-  - Báo cáo ván: "% nước của bạn trùng lựa chọn của Carlsen / Liêm / Dubov".
+  - Báo cáo ván: "% nước của bạn trùng lựa chọn của Carlsen / Liêm / Nakamura".
   - Training: **đấu với bot theo phong cách**; puzzle **"Tìm nước kiện tướng đã đi"** lấy từ ván thật
     của họ (lời giải = nước họ đã đi, Stockfish xác nhận không phải sai lầm).
+  *Code xong phần đấu: `/play` mặc định chọn kiện tướng (thẻ chữ cái đầu, số ván, % đoán trúng trên test), bot rút nước theo xác suất, khai cuộc theo repertoire thật, "Phân tích ván này" như cũ. Trang phân tích có tab "Kiện tướng" (`POST /api/styles/compare`: top-3 mỗi người + điểm Stockfish, đánh dấu nước đã đi trong ván); báo cáo ván có thẻ "Trùng lựa chọn của kiện tướng" (`POST /api/styles/match`: % top-1/top-3 mỗi bên, khai cuộc so với sổ). Chưa làm: puzzle "tìm nước kiện tướng".*
 - [ ] **D7 Ghi nhãn trung thực**: hiển thị "Mô phỏng phong cách dựa trên N ván công khai của …", không
   dùng ảnh hay thương hiệu cá nhân, ghi nguồn dữ liệu và giấy phép trong báo cáo.
+  *Đã áp dụng trên `/play`: câu "Mô phỏng phong cách dựa trên N ván công khai (năm–năm) của …, phần lớn là cờ nhanh online. Đây không phải chính kỳ thủ.", không dùng ảnh.*
 
 ## Giai đoạn E — Mô hình bổ trợ (làm nếu còn thời gian) · ~6–8 ngày
 
