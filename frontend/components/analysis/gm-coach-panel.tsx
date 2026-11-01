@@ -8,9 +8,8 @@ import { percent } from "@/components/analysis/human-moves-panel";
 import { coachComment } from "@/lib/coach";
 import { formatHumanMoveScore } from "@/lib/human-moves";
 import type { MoveAssessment } from "@/lib/move-classification";
-import { initials, shortName } from "@/lib/styles";
+import { initials, readPerspective, shortName, storePerspective } from "@/lib/styles";
 
-const PERSPECTIVE_KEY = "chess-analysis-coach-perspective";
 const VOICE_KEY = "chess-analysis-coach-voice";
 const ALL = "all";
 
@@ -77,7 +76,7 @@ export function GmCoachPanel({
   const [details, setDetails] = useState(false);
 
   useEffect(() => {
-    setPerspective(readStored(PERSPECTIVE_KEY) ?? "");
+    setPerspective(readPerspective() ?? "");
     setVoice(readStored(VOICE_KEY) === "on");
     return stopSpeaking;
   }, []);
@@ -103,7 +102,7 @@ export function GmCoachPanel({
 
   function choose(value: string) {
     setPerspective(value);
-    store(PERSPECTIVE_KEY, value);
+    storePerspective(value);
   }
 
   function toggleVoice() {

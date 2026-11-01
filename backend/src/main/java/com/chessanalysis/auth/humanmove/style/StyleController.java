@@ -18,6 +18,7 @@ import com.chessanalysis.auth.humanmove.style.dto.StyleMoveRequest;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMoveResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionRequest;
 import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionResponse;
+import com.chessanalysis.auth.humanmove.style.dto.StyleReviewResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StylesResponse;
 
 /** Mô hình phong cách kiện tướng (giai đoạn D): đấu bot, so sánh trên trang phân tích, báo cáo ván. Không cần đăng nhập. */
@@ -49,6 +50,14 @@ public class StyleController {
     @PostMapping("/match")
     public StyleMatchResponse match(@Valid @RequestBody EloEstimateRequest request) {
         return service.match(request.moves().stream()
+                .map(move -> HumanMoveService.played(move.fen(), move.uci()))
+                .toList());
+    }
+
+    /** Cả ván theo góc nhìn kỳ thủ {@code id}; cùng định dạng request với ước lượng Elo. */
+    @PostMapping("/{id}/review")
+    public StyleReviewResponse review(@PathVariable String id, @Valid @RequestBody EloEstimateRequest request) {
+        return service.review(id, request.moves().stream()
                 .map(move -> HumanMoveService.played(move.fen(), move.uci()))
                 .toList());
     }

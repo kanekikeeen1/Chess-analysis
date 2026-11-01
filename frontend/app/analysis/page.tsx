@@ -80,6 +80,8 @@ import { MoveHistory } from "@/components/analysis/move-history";
 import { HumanMovesPanel } from "@/components/analysis/human-moves-panel";
 import { GameEloCard } from "@/components/analysis/game-elo-card";
 import { GmCoachPanel } from "@/components/analysis/gm-coach-panel";
+import { GmReviewCard, PerspectivePicker } from "@/components/analysis/gm-review";
+import { readPerspective, shortName, STOCKFISH_ONLY, storePerspective, useStyles } from "@/lib/styles";
 import { StyleMatchCard } from "@/components/analysis/style-match-card";
 import { StyleMovesPanel } from "@/components/analysis/style-moves-panel";
 import { IMPORT_PGN_KEY } from "@/lib/human-moves";
@@ -110,6 +112,9 @@ export default function AnalysisPage() {
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const [reviewMode, setReviewMode] = useState<InputType | null>(null);
   const [reviewDepthMode, setReviewDepthMode] = useState<ReviewDepthMode>("deep");
+  // Góc nhìn phân tích: "stockfish" hoặc id kiện tướng; báo cáo thêm phần theo góc nhìn kiện tướng đó.
+  const [reviewPerspective, setReviewPerspective] = useState<string>(STOCKFISH_ONLY);
+  const { styles: styleList } = useStyles();
   const [reviewSessionId, setReviewSessionId] = useState(0);
   const [reviewTimeline, setReviewTimeline] = useState<AnalysisTimeline | null>(null);
   const [variationTimeline, setVariationTimeline] = useState<VariationTimeline | null>(null);
@@ -236,6 +241,13 @@ export default function AnalysisPage() {
   const pieceSet = useMemo(() => createPieceSet(pieceTheme), [pieceTheme]);
 
   const currentFen = positions[currentIndex] ?? STARTING_POSITION;
+  const perspectiveStyle = styleList?.available
+    ? styleList.styles.find((style) => style.id === reviewPerspective) ?? null
+    : null;
+
+  useEffect(() => {
+    setReviewPerspective(readPerspective() ?? STOCKFISH_ONLY);
+  }, []);
   const currentGame = useMemo(() => new Chess(currentFen), [currentFen]);
   const isVariationActive = Boolean(reviewMode && viewingVariation && variationTimeline);
   const payloadTimeline = useMemo<AnalysisTimeline>(
@@ -749,6 +761,11 @@ export default function AnalysisPage() {
     setMessage("Đang xem biến thử — Stockfish phân tích các nước mới ở depth 16");
   }
 
+  function chooseReviewPerspective(value: string) {
+    setReviewPerspective(value);
+    storePerspective(value);
+  }
+
   function playBestMoveSuggestion() {
     if (!bestMoveSuggestion) return;
     replaceCurrentMove(bestMoveSuggestion.uci, "nước đi tốt nhất");
@@ -1134,6 +1151,16 @@ export default function AnalysisPage() {
               {reviewComplete && reviewedMoves.length > 0 && (
                 <>
                   <GameEloCard moves={reviewedMoves} playerNames={playerNames} />
+                  {perspectiveStyle && (
+                    <GmReviewCard
+                      assessments={moveAssessments}
+                      moves={reviewedMoves}
+                      onSelect={goToPosition}
+                      playerNames={playerNames}
+                      styleId={perspectiveStyle.id}
+                      userSide={userSide}
+                    />
+                  )}
                   <StyleMatchCard moves={reviewedMoves} playerNames={playerNames} />
                 </>
               )}
@@ -1310,6 +1337,8 @@ export default function AnalysisPage() {
               </div>
             </div>
 
+            <PerspectivePicker value={reviewPerspective} onChange={chooseReviewPerspective} />
+
             <textarea
               value={gameText}
               onChange={(event) => setGameText(event.target.value)}
@@ -1348,6 +1377,7 @@ export default function AnalysisPage() {
               >
                 <ScanSearch className="size-5" />
                 Phân tích · {REVIEW_DEPTH_RANGES[reviewDepthMode].label}
+                {perspectiveStyle ? ` + ${shortName(perspectiveStyle.displayName)}` : ""}
               </button>
             </div>
           </div>

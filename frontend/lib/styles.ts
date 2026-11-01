@@ -214,3 +214,40 @@ export function fetchStyleOpinion(fen: string, uci: string, options: { engineDep
     signal: options.signal,
   });
 }
+
+export type StyleReviewResponse = {
+  style: string;
+  displayName: string;
+  /** Phần tử thứ i ứng với nước thứ i của ván; mỗi phần tử có tối đa 2 nước kỳ thủ chọn, không có điểm Stockfish. */
+  moves: StyleOpinion[];
+};
+
+/** Cả ván theo góc nhìn kỳ thủ `id`. */
+export function fetchStyleReview(id: string, moves: Array<{ fen: string; uci: string }>, signal?: AbortSignal) {
+  return backendRequest<StyleReviewResponse>(`/api/styles/${encodeURIComponent(id)}/review`, {
+    method: "POST",
+    body: JSON.stringify({ moves: moves.slice(0, ESTIMATE_MAX_MOVES) }),
+    signal,
+  });
+}
+
+/** Góc nhìn đã chọn ở tab Nạp ván; bảng "Góc nhìn phân tích" cũng mở theo lựa chọn này. */
+export const PERSPECTIVE_KEY = "chess-analysis-coach-perspective";
+/** Giá trị của PERSPECTIVE_KEY khi người dùng chỉ muốn Stockfish. */
+export const STOCKFISH_ONLY = "stockfish";
+
+export function readPerspective() {
+  try {
+    return window.localStorage.getItem(PERSPECTIVE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function storePerspective(value: string) {
+  try {
+    window.localStorage.setItem(PERSPECTIVE_KEY, value);
+  } catch {
+    // Không lưu được thì lần sau dùng mặc định.
+  }
+}

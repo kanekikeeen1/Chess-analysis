@@ -96,6 +96,16 @@ class StyleMoveServiceTest {
             assertTrue(modelOpinion.playedProbability() > 0);
             assertEquals(3, modelOpinion.top().size());
 
+            // Cả ván theo góc nhìn một kỳ thủ: mỗi nước một phần tử, đúng thứ tự.
+            var review = service.review("tester", List.of(
+                    HumanMoveService.played(START, "d2d4"),
+                    HumanMoveService.played(RUY_LOPEZ, "a7a6")));
+            assertEquals(2, review.moves().size());
+            assertEquals("book", review.moves().get(0).source());
+            assertEquals(1, review.moves().get(0).playedRank());
+            assertEquals(2, review.moves().get(0).top().size());
+            assertEquals("model", review.moves().get(1).source());
+
             ApiException missing = assertThrows(ApiException.class, () -> service.moves("nobody", START, 5));
             assertEquals(404, missing.getStatus().value());
         } finally {

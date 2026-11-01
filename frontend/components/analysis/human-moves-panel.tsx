@@ -117,8 +117,8 @@ export function HumanMovesPanel({
   const [selected, setSelected] = useState<number[]>(DEFAULT_BUCKETS);
   const [withEngine, setWithEngine] = useState(true);
   const [loaded, setLoaded] = useState(false);
-  // Giữ kèm FEN đã hỏi: kết quả của thế cờ trước không được hiện ở thế cờ mới.
-  const [result, setResult] = useState<{ fen: string; data: HumanMoveResponse } | null>(null);
+  // Giữ kèm FEN và các mức Elo đã hỏi: kết quả cũ không được vẽ với thế cờ hay danh sách mức mới (số cột sẽ lệch).
+  const [result, setResult] = useState<{ key: string; data: HumanMoveResponse } | null>(null);
   const [error, setError] = useState("");
   const [phase, setPhase] = useState<"idle" | "model" | "engine">("idle");
 
@@ -158,7 +158,7 @@ export function HumanMovesPanel({
     const modelKey = `${fen}|${elosKey}|m`;
     const engineKey = `${fen}|${elosKey}|e`;
     const cached = (withEngine && responseCache.get(engineKey)) || responseCache.get(modelKey);
-    if (cached) setResult({ data: cached, fen });
+    if (cached) setResult({ data: cached, key: `${fen}|${elosKey}` });
     if (cached && (!withEngine || responseCache.has(engineKey))) {
       setPhase("idle");
       setError("");
@@ -176,14 +176,14 @@ export function HumanMovesPanel({
           setPhase("model");
           const data = await fetchHumanMoves(fen, elos, options);
           remember(modelKey, data);
-          setResult({ data, fen });
+          setResult({ data, key: `${fen}|${elosKey}` });
         }
         if (withEngine) {
           setPhase("engine");
           const data = await fetchHumanMoves(fen, elos, { ...options, engineDepth: ENGINE_DEPTH });
           // Lỗi engine (bận, thiếu STOCKFISH_PATH) không lưu vào cache, để lần sau còn thử lại.
           if (!data.engineNote) remember(engineKey, data);
-          setResult({ data, fen });
+          setResult({ data, key: `${fen}|${elosKey}` });
         }
         setPhase("idle");
       } catch (caught) {
@@ -210,7 +210,7 @@ export function HumanMovesPanel({
   }
 
   const moverIsWhite = fen.split(" ")[1] === "w";
-  const shownResult = result?.fen === fen ? result.data : null;
+  const shownResult = result?.key === `${fen}|${elosKey}` ? result.data : null;
   const rows = useMemo(
     () => (shownResult ? buildRows(shownResult, moverIsWhite) : []),
     [moverIsWhite, shownResult],

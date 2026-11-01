@@ -23,6 +23,7 @@ import com.chessanalysis.auth.humanmove.style.dto.StyleCompareResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMatchResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleMoveResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StyleOpinionResponse;
+import com.chessanalysis.auth.humanmove.style.dto.StyleReviewResponse;
 import com.chessanalysis.auth.humanmove.style.dto.StylesResponse;
 import com.chessanalysis.auth.service.ApiException;
 import com.github.bhlangonijr.chesslib.Board;
@@ -100,22 +101,9 @@ public class StyleMoveService {
         List<StyleOpinionResponse.StyleOpinion> opinions = new ArrayList<>();
         Set<String> distinct = new LinkedHashSet<>(List.of(playedUci));
         for (Style style : registry.all()) {
-            StyleModelRegistry.Entry entry = style.entry();
-            Map<String, Integer> book = style.book().get(bookKey(normalized));
-            // Sổ trước, mô hình sau (như bot); lấy đủ mọi nước để biết nước đã đi đứng thứ mấy.
-            StyleMoveResponse ranked = moves(style, board, normalized, legalCount);
-            List<ScoredMove> all = ranked.moves();
-            int rank = 0;
-            double probability = 0;
-            while (rank < all.size() && !all.get(rank).uci().equals(playedUci)) rank++;
-            if (rank < all.size()) probability = all.get(rank).probability();
-            // Trong sổ thì nước kỳ thủ chưa từng đi xếp sau mọi nước trong sổ; hòa số lần thì cùng hạng.
-            if ("book".equals(ranked.source())) rank = bookRank(book, playedUci);
-            List<ScoredMove> top = all.subList(0, Math.min(3, all.size()));
-            top.forEach(move -> distinct.add(move.uci()));
-            opinions.add(new StyleOpinionResponse.StyleOpinion(entry.id(), entry.displayName(), ranked.source(),
-                    ranked.bookGames(), "book".equals(ranked.source()) ? book.getOrDefault(playedUci, 0) : null,
-                    probability, rank, List.copyOf(top)));
+            StyleOpinionResponse.StyleOpinion opinion = opinionOf(style, board, normalized, playedUci, legalCount, 3);
+            opinion.top().forEach(move -> distinct.add(move.uci()));
+            opinions.add(opinion);
         }
 
         HumanMoveService.EngineScores scores = engines == null
@@ -130,6 +118,41 @@ public class StyleMoveService {
         ScoredMove playedMove = withScore(new ScoredMove(playedUci, HumanMoveModel.san(board, played), 0, null, null),
                 scores.byMove().get(playedUci));
         return new StyleOpinionResponse(normalized, playedMove, scored, scores.note());
+    }
+
+    /**
+     * Báo cáo cả ván theo góc nhìn một kỳ thủ: với từng nước, kỳ thủ có hay chọn nước đó không và họ sẽ đi gì
+     * (2 lựa chọn đầu). Không chấm Stockfish: trang phân tích đã có điểm từng nước từ lần review.
+     */
+    public StyleReviewResponse review(String id, List<PlayedMove> played) {
+        Style style = registry.find(id).orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND,
+                "Không có mô hình kỳ thủ '" + id + "'."));
+        List<StyleOpinionResponse.StyleOpinion> moves = played.stream().map(move -> {
+            Board board = move.board();
+            return opinionOf(style, board, ChessRules.chessJsFen(board), move.move().toString(),
+                    board.legalMoves().size(), 2);
+        }).toList();
+        return new StyleReviewResponse(style.entry().id(), style.entry().displayName(), moves);
+    }
+
+    /** Nước {@code playedUci} đứng thứ mấy trong lựa chọn của kỳ thủ (sổ trước, mô hình sau), kèm {@code topK} nước đầu. */
+    private StyleOpinionResponse.StyleOpinion opinionOf(Style style, Board board, String normalized, String playedUci,
+            int legalCount, int topK) {
+        StyleModelRegistry.Entry entry = style.entry();
+        Map<String, Integer> book = style.book().get(bookKey(normalized));
+        // Lấy đủ mọi nước để biết nước đã đi đứng thứ mấy.
+        StyleMoveResponse ranked = moves(style, board, normalized, legalCount);
+        List<ScoredMove> all = ranked.moves();
+        int rank = 0;
+        double probability = 0;
+        while (rank < all.size() && !all.get(rank).uci().equals(playedUci)) rank++;
+        if (rank < all.size()) probability = all.get(rank).probability();
+        boolean fromBook = "book".equals(ranked.source());
+        // Trong sổ thì nước kỳ thủ chưa từng đi xếp sau mọi nước trong sổ; hòa số lần thì cùng hạng.
+        if (fromBook) rank = bookRank(book, playedUci);
+        return new StyleOpinionResponse.StyleOpinion(entry.id(), entry.displayName(), ranked.source(),
+                ranked.bookGames(), fromBook ? book.getOrDefault(playedUci, 0) : null, probability, rank,
+                List.copyOf(all.subList(0, Math.min(topK, all.size()))));
     }
 
     /**
