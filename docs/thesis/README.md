@@ -19,3 +19,8 @@ cd ml
 
 Checkpoint (`ml/runs/<run>/best.pt`) **không** nằm trong thư mục này và không
 được commit vào git, vì file khá nặng. Hãy tự sao lưu nếu cần nộp mô hình.
+
+## Ôn bảo vệ
+
+`BAO_VE_ML.md` tổng hợp toàn bộ phần ML (M2 và phong cách kiện tướng): dữ liệu, mô hình, huấn luyện, kết quả, hạn
+chế và các câu hỏi hội đồng hay gặp. Nhận xét chi tiết của từng giai đoạn nằm ở `m2/<run>/NOTES.md` và `style/NOTES.md`.

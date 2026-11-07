@@ -20,6 +20,9 @@ chess-analysis/
 - 10 bài tàn cuộc có ba thế cờ ngẫu nhiên mỗi bài; backend Stockfish chấm từng nước, đặt icon nhãn trên bàn cờ, gợi ý nước tốt nhất và đánh trả.
 - Lưu lần làm bài và điểm tốt nhất của từng tài khoản.
 
+> **Cài trên máy mới, gồm cả các mô hình ML không nằm trong git:** xem [`docs/SETUP.md`](docs/SETUP.md).
+> **Tài liệu ôn bảo vệ phần Machine Learning:** [`docs/thesis/BAO_VE_ML.md`](docs/thesis/BAO_VE_ML.md).
+
 ## Yêu cầu
 
 - Node.js 22 trở lên
