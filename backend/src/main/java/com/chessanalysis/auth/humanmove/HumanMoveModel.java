@@ -72,17 +72,42 @@ public class HumanMoveModel implements DisposableBean {
             return;
         }
 
+        Metadata loadedMetadata;
+        M2Encoding loadedEncoding;
         try {
-            this.metadata = objectMapper.readValue(metaPath.toFile(), Metadata.class);
-            metadata.validate();
-            this.encoding = new M2Encoding(metadata.moveUcis(),
-                    metadata.eloBucketEdges().stream().mapToInt(Integer::intValue).toArray(),
-                    metadata.eloCenter(), metadata.eloScale());
-            this.environment = OrtEnvironment.getEnvironment();
-            this.session = environment.createSession(this.modelPath.toString(), new OrtSession.SessionOptions());
-        } catch (IOException | OrtException exception) {
-            throw new IllegalStateException("Không nạp được mô hình M2 " + this.modelPath, exception);
+            loadedMetadata = objectMapper.readValue(metaPath.toFile(), Metadata.class);
+            loadedMetadata.validate();
+            loadedEncoding = new M2Encoding(loadedMetadata.moveUcis(),
+                    loadedMetadata.eloBucketEdges().stream().mapToInt(Integer::intValue).toArray(),
+                    loadedMetadata.eloCenter(), loadedMetadata.eloScale());
+        } catch (IOException exception) {
+            throw new IllegalStateException("Không đọc được metadata của mô hình M2 " + metaPath, exception);
         }
+
+        OrtEnvironment loadedEnvironment;
+        OrtSession loadedSession;
+        try {
+            loadedEnvironment = OrtEnvironment.getEnvironment();
+            loadedSession = loadedEnvironment.createSession(this.modelPath.toString(), new OrtSession.SessionOptions());
+        } catch (LinkageError error) {
+            // Thư viện native onnxruntime.dll không nạp được. Trên Windows mới cài, nguyên nhân thường là thiếu
+            // Microsoft Visual C++ Redistributable. Không làm sập cả backend: chỉ các tính năng mô hình bị tắt.
+            this.environment = null;
+            this.session = null;
+            this.encoding = null;
+            this.metadata = null;
+            this.unavailableReason = "Không nạp được ONNX Runtime (" + error.getMessage() + "). Trên Windows, hãy cài "
+                    + "Microsoft Visual C++ Redistributable x64 (winget install Microsoft.VCRedist.2015+.x64) rồi chạy lại.";
+            LOGGER.error(unavailableReason, error);
+            return;
+        } catch (OrtException exception) {
+            throw new IllegalStateException("Không nạp được mô hình M2 " + this.modelPath
+                    + " (file hỏng hoặc chép thiếu?)", exception);
+        }
+        this.metadata = loadedMetadata;
+        this.encoding = loadedEncoding;
+        this.environment = loadedEnvironment;
+        this.session = loadedSession;
         this.unavailableReason = null;
         LOGGER.info("Đã nạp mô hình M2 {} (bước huấn luyện {}, {} nước, {} dải Elo)",
                 this.modelPath, metadata.trainStep(), encoding.numMoves(), encoding.numEloBuckets());

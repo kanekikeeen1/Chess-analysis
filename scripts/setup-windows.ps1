@@ -7,7 +7,8 @@
   thì bỏ qua. Nếu được yêu cầu khởi động lại máy (WSL/Docker), khởi động lại rồi chạy setup.cmd thêm lần nữa.
 
   Các bước:
-    1. Cài bằng winget: Git, JDK 17 (Temurin), Node.js LTS, Docker Desktop (+ Python 3.13 nếu -WithPython)
+    1. Cài bằng winget: Git, Visual C++ Redistributable, JDK 17 (Temurin), Node.js LTS, Docker Desktop
+       (+ Python 3.13 nếu -WithPython)
     2. Tải Stockfish vào C:\tools\stockfish, đặt biến môi trường STOCKFISH_PATH, JAVA_HOME
     3. Kiểm tra mô hình ml/models (phải chép từ máy cũ), tải file puzzle Lichess nếu thiếu
     4. npm install cho frontend
@@ -103,6 +104,10 @@ if (-not (Has-Command "winget")) {
 Refresh-Path
 
 if (Has-Command "git") { Ok "Git đã có" } else { Install-Winget "Git.Git" "Git" }
+
+# ONNX Runtime (mô hình M2 và mô hình kiện tướng trong backend) cần thư viện C++ của Microsoft; Windows mới cài không có sẵn.
+if (Test-Path "$env:WINDIR\System32\msvcp140.dll") { Ok "Visual C++ Redistributable đã có" }
+else { Install-Winget "Microsoft.VCRedist.2015+.x64" "Visual C++ Redistributable x64" }
 
 $javaOk = $false
 if (Has-Command "java") {
